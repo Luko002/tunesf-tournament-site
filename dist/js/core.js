@@ -39,7 +39,7 @@ const SUPABASE_CONFIG=Object.assign({url:'',anonKey:''},window.TUNESF_SUPABASE||
 const SUPA={client:null};
 const LOCAL_ORIGIN=location.protocol==='file:'||['localhost','127.0.0.1'].includes(location.hostname);
 const READ_ONLY_PREVIEW=SUPABASE_CONFIG.environment==='production'&&LOCAL_ORIGIN;
-const READ_ONLY_RPCS=new Set(['get_my_roles','get_my_permissions','list_team_roster','list_team_invitations']);
+const READ_ONLY_RPCS=new Set(['get_my_roles','get_my_permissions','list_team_roster','list_team_invitations','list_public_clubs','list_public_team_rosters','get_team_captain_inbox']);
 function supabaseFetch(input,init){
   if(!READ_ONLY_PREVIEW)return fetch(input,init);
   const url=new URL(input instanceof Request?input.url:String(input),SUPABASE_CONFIG.url);
@@ -123,7 +123,7 @@ function buildNav(){
   $$('.js-logo-s').forEach(el=>{el.innerHTML=logoSvg(30);});
   const nl=$('#navLinks'),page=currentPage();
   if(nl){
-    const links=[['index.html','Home'],['tournaments.html','Tournaments'],['standings.html','Standings'],['bracket.html','Bracket'],['roles.html','Roles']];
+    const links=[['index.html','Home'],['tournaments.html','Tournaments'],['clubs.html','Clubs'],['standings.html','Standings'],['bracket.html','Bracket'],['roles.html','Roles']];
     let html=links.map(([href,label])=>`<a href="${href}"${page===href?' class="act"':''}>${label}</a>`).join('');
     const consoles=Auth.consoles();
     if(consoles.length===1)html+=`<a href="${consoles[0].href}">${consoles[0].label}</a>`;

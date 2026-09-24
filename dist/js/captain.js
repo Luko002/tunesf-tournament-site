@@ -67,13 +67,16 @@ Auth.ready.then(async()=>{
     }
     const eventById=new Map(events.map(row=>[row.id,row]));
     const results=await Promise.all(teams.map(async team=>{
-      const [rosterResult,invitesResult]=await Promise.all([
+      const [rosterResult,invitesResult,gamesResult,gameRosterResult,inboxResult]=await Promise.all([
         SUPA.client.rpc('list_team_roster',{p_team_id:team.id}),
-        SUPA.client.rpc('list_team_invitations',{p_team_id:team.id})
+        SUPA.client.rpc('list_team_invitations',{p_team_id:team.id}),
+        SUPA.client.from('team_game_rosters').select('game').eq('team_id',team.id),
+        SUPA.client.rpc('list_public_team_rosters',{p_team_id:team.id}),
+        SUPA.client.rpc('get_team_captain_inbox',{p_team_id:team.id})
       ]);
-      return {team,roster:rosterResult.data||[],rosterError:rosterResult.error,invites:invitesResult.data||[],invitesError:invitesResult.error};
+      return {team,roster:rosterResult.data||[],rosterError:rosterResult.error,invites:invitesResult.data||[],invitesError:invitesResult.error,games:gamesResult.data||[],gamesError:gamesResult.error,gameRoster:gameRosterResult.data||[],gameRosterError:gameRosterResult.error,inbox:inboxResult.data||[],inboxError:inboxResult.error};
     }));
-    cards.innerHTML=results.map(({team,roster,rosterError,invites,invitesError})=>{
+    cards.innerHTML=results.map(({team,roster,rosterError,invites,invitesError,games,gamesError,gameRoster,gameRosterError,inbox,inboxError})=>{
       const active=roster.filter(row=>row.status==='active');
       const pending=invites.filter(inv=>!inv.revoked_at&&!inv.accepted_at&&new Date(inv.expires_at)>new Date());
       const rosterHtml=rosterError?'<p class="team-empty">Could not load this roster.</p>':active.length?`<ul class="team-roster">${active.map(row=>{
@@ -106,10 +109,17 @@ Auth.ready.then(async()=>{
         return `<li class="event-reg"><span><b>${esc(event.name)}</b><small>${esc(reg.status.replaceAll('_',' '))}${event.starts_at?' · '+esc(new Date(event.starts_at).toLocaleString()):''}</small></span>${checkin}</li>${matchHtml}`;
       }).join(''):'<li class="team-empty">This team has no tournament registrations.</li>';
       const pendingItems=invitesError?'<li class="team-empty">Could not load invitations.</li>':pending.length?pending.map(inv=>`<li data-pending-invitation="${esc(inv.invitation_id)}"><span><b>${esc(inv.member_role)}</b><small>Expires ${esc(fmtDate(inv.expires_at))}</small></span><button class="btn btn-line btn-sm" data-revoke="${esc(inv.invitation_id)}" data-team="${esc(team.id)}">Revoke</button></li>`).join(''):'<li class="team-empty">No pending invitations.</li>';
+      const gameRosterHtml=gameRosterError||gamesError?'<p class="team-empty">Could not load game rosters.</p>':games.map(({game})=>{
+        const assigned=gameRoster.filter(row=>row.game===game);
+        return `<div class="club-roster"><b>${esc(gameName[game]||game)} <small>${assigned.length} players</small></b><div class="captain-game-assign">${active.map(member=>`<label><input type="checkbox" data-game-member="${esc(member.user_id)}" data-game="${esc(game)}" data-team="${esc(team.id)}"${assigned.some(row=>row.user_id===member.user_id)?' checked':''}>${esc(member.username||member.player_name||'Player')}</label>`).join('')}</div></div>`;
+      }).join('')||'<p class="team-empty">Enable at least one game roster.</p>';
+      const inboxHtml=inboxError?'<p class="team-empty">Could not load captain messages.</p>':inbox.length?`<div class="captain-inbox-list">${inbox.map(item=>`<article class="captain-inbox-item"><small>${item.item_type==='join_request'?'Join request':'Message'} · ${esc(item.username||'Player')} · ${esc(fmtDate(item.created_at))}${item.game?' · '+esc(gameName[item.game]||item.game):''}</small><p>${esc(item.message)}</p>${item.item_type==='join_request'&&item.status==='pending'?`<button class="btn btn-gold btn-sm" type="button" data-review-request="${esc(item.item_id)}" data-status="accepted">Accept</button><button class="btn btn-line btn-sm" type="button" data-review-request="${esc(item.item_id)}" data-status="declined">Decline</button>`:''}${item.item_type==='message'&&!item.read_at?`<button class="btn btn-line btn-sm" type="button" data-read-message="${esc(item.item_id)}">Mark read</button>`:''}</article>`).join('')}</div>`:'<p class="team-empty">No messages or join requests yet.</p>';
       return `<article class="dcard team-card" data-team-card="${esc(team.id)}">
         <div class="dh"><i data-lucide="shield"></i>${esc(team.name)}<span class="mono-r">${esc(team.tag)}</span></div>
         <div class="db"><div class="team-meta"><span>${esc(gameName[team.game]||team.game)}</span><span>${esc(team.region||'Region not set')}</span></div>
           <h3 class="team-section-title">Active roster <span>${active.length}</span></h3>${rosterHtml}
+          <h3 class="team-section-title">Game rosters</h3>${gamesError?'':`<form class="captain-games-form" data-team-games="${esc(team.id)}">${Object.entries(gameName).map(([key,label])=>`<label><input type="checkbox" name="game" value="${esc(key)}"${games.some(g=>g.game===key)?' checked':''}>${esc(label)}</label>`).join('')}<button class="btn btn-line btn-sm" type="submit">Save games</button></form>`}${gameRosterHtml}
+          <h3 class="team-section-title">Player messages <span>${inbox.filter(item=>item.item_type==='join_request'&&item.status==='pending').length+inbox.filter(item=>item.item_type==='message'&&!item.read_at).length}</span></h3>${inboxHtml}
           <h3 class="team-section-title">Tournament participation <span>${teamEvents.length}</span></h3><ul class="team-invites">${eventHtml}</ul>
           <form class="invite-create-form" data-invite-form="${esc(team.id)}">
             <label><span>Invite as</span><select name="member_role"><option value="player">Player</option><option value="substitute">Substitute</option></select></label>
@@ -143,6 +153,18 @@ Auth.ready.then(async()=>{
   });
 
   panel.addEventListener('submit',async event=>{
+    const gamesForm=event.target.closest('[data-team-games]');
+    if(gamesForm){
+      event.preventDefault();
+      const button=gamesForm.querySelector('button[type="submit"]');button.disabled=true;
+      try{
+        const {error}=await SUPA.client.rpc('set_team_games',{p_team_id:gamesForm.dataset.teamGames,p_games:[...new FormData(gamesForm).getAll('game').map(String)]});
+        if(error)throw error;
+        toast('ok','Game rosters saved','Assign players to each game roster below.');
+        try{await loadTeams();}catch(refreshError){showError('Games saved, but the workspace did not refresh',refreshError);}
+      }catch(error){showError('Could not save game rosters',error);button.disabled=false;}
+      return;
+    }
     const scoreForm=event.target.closest('[data-submit-score]');
     if(scoreForm){
       event.preventDefault();
@@ -211,6 +233,24 @@ Auth.ready.then(async()=>{
   });
 
   panel.addEventListener('click',async event=>{
+    const review=event.target.closest('[data-review-request]');
+    if(review){
+      review.disabled=true;
+      try{
+        const {error}=await SUPA.client.rpc('review_team_join_request',{p_request_id:review.dataset.reviewRequest,p_status:review.dataset.status});
+        if(error)throw error;
+        toast('ok',review.dataset.status==='accepted'?'Player joined':'Request declined',review.dataset.status==='accepted'?'The player was added to the requested game roster.':'The player request was declined.');
+        try{await loadTeams();}catch(refreshError){showError('Request updated, but the workspace did not refresh',refreshError);}
+      }catch(error){showError('Could not review request',error);review.disabled=false;}
+      return;
+    }
+    const read=event.target.closest('[data-read-message]');
+    if(read){
+      read.disabled=true;
+      try{const {error}=await SUPA.client.rpc('mark_team_message_read',{p_message_id:read.dataset.readMessage});if(error)throw error;await loadTeams();}
+      catch(error){showError('Could not update message',error);read.disabled=false;}
+      return;
+    }
     const checkin=event.target.closest('[data-team-checkin]');
     if(checkin){
       checkin.disabled=true;
@@ -268,6 +308,17 @@ Auth.ready.then(async()=>{
         try{await loadTeams();}catch(refreshError){showError('Invitation revoked, but the workspace did not refresh',refreshError);}
       }catch(error){showError('Could not revoke invitation',error);revoke.disabled=false;}
     }
+  });
+
+  panel.addEventListener('change',async event=>{
+    const input=event.target.closest('[data-game-member]');if(!input)return;
+    input.disabled=true;
+    try{
+      const {error}=await SUPA.client.rpc('set_team_game_member',{p_team_id:input.dataset.team,p_game:input.dataset.game,p_user_id:input.dataset.gameMember,p_active:input.checked});
+      if(error)throw error;
+      toast('ok','Game roster updated','The player assignment has been saved.');
+    }catch(error){input.checked=!input.checked;showError('Could not update game roster',error);}
+    finally{input.disabled=false;}
   });
 
   try{await loadTeams();}

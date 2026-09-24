@@ -169,6 +169,17 @@
 
 .team-overview-grid{margin-top:22px;grid-template-columns:1fr 1fr}
 
+/* Public club directory and player-to-captain contact. */
+.club-controls{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:20px}
+.club-search{max-width:460px;flex:1}.club-count,.club-meta{font:500 10px/1.5 var(--fm);letter-spacing:.1em;color:var(--faint);text-transform:uppercase}
+.club-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.club-card .dh{display:flex;align-items:center;gap:8px}.club-card .db{display:grid;gap:12px}.club-note{color:var(--dim);font-size:12px}
+.club-roster{border-top:1px solid var(--line);padding-top:10px}.club-roster>b{display:flex;justify-content:space-between;font:600 11px/1.4 var(--fd);text-transform:uppercase}.club-roster small{font:500 9px var(--fm);color:var(--faint)}.club-roster p{font-size:12px;color:var(--dim);margin-top:4px}
+.club-contact{display:grid;gap:10px;border-top:1px solid var(--line);padding-top:14px}.club-contact label>span{display:block;margin-bottom:4px;color:var(--faint);font:600 9px/1.4 var(--fm);letter-spacing:.14em;text-transform:uppercase}.club-contact textarea{min-height:72px}.club-contact button{justify-self:start}
+.captain-games-form{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:10px 0}.captain-games-form label,.captain-game-assign label{display:flex;align-items:center;gap:6px;color:var(--dim);font-size:11px}.captain-games-form input,.captain-game-assign input{width:auto;accent-color:var(--gold)}.captain-game-assign{display:flex;gap:9px;flex-wrap:wrap;margin-top:8px}
+.captain-inbox-list{display:grid;gap:12px}.captain-inbox-item{padding:12px;border:1px solid var(--line)}.captain-inbox-item p{margin:6px 0;color:var(--dim);white-space:pre-wrap}.captain-inbox-item small{color:var(--faint);font:500 9px var(--fm)}.captain-inbox-item .btn{margin:8px 6px 0 0}
+@media(max-width:880px){.club-grid{grid-template-columns:1fr}.club-controls{align-items:stretch;flex-direction:column}}
+
 /* ============ RESPONSIVE ============ */
 @media(max-width:1120px){
   .rolecards{grid-template-columns:1fr 1fr}
