@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Organizer Engine — TUNESF</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=Barlow:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css?v=20260924g">
+<link rel="stylesheet" href="css/pages.css">
+</head>
+<body>
+
+<header class="top" id="topbar">
+  <div class="wrap navbar">
+    <a class="logo" href="index.html"><span class="js-logo"></span><span><b>TUNESF</b><small>ESPORTS FEDERATION</small></span></a>
+    <nav class="nav-links" id="navLinks"></nav>
+    <div class="nav-cta" id="navCta"></div>
+  </div>
+</header>
+
+<main>
+<section class="page-hero"><div class="wrap">
+  <div class="crumbs"><a href="index.html">TUNESF</a><span>/</span><a href="roles.html">Roles</a><span>/</span><b>Organizer engine</b></div>
+  <div class="eyebrow">07 — For Tournament Admins</div>
+  <h1 class="ph-title">Create a <span class="out2">Tournament</span></h1>
+  <p class="lead">The same engine the federation uses. Eight configuration stages, condensed into five steps — publish straight to the discovery grid, then run brackets, referees and disputes from this seat.</p>
+</div></section>
+
+<section class="sec tight"><div class="wrap">
+  <div class="console-strip" id="consoleStrip"></div>
+
+  <div class="wiz rv" style="margin-top:22px">
+    <div class="wiz-rail" id="wRail"></div>
+    <div class="wiz-main">
+      <div class="wpane" data-w="0">
+        <h3>Identity &amp; game</h3>
+        <div class="wrow"><div><label class="fl">Tournament name</label><input id="wName" placeholder="Tournament name" maxlength="120" required></div>
+        <div><label class="fl">Region</label><select id="wRegion"><option>ONLINE · TUNISIA</option><option>MENA WEST</option><option>LAN · TUNIS</option><option>LAN · SOUSSE</option></select></div></div>
+        <div id="wOrganizationWrap" hidden><label class="fl" for="wOrganization">Hosting organization</label><select id="wOrganization"><option value="">Personal tournament</option></select><small class="team-empty">Choose an organization you manage, or leave this as a personal event.</small></div>
+        <label class="fl">Select game</label>
+        <div class="gtiles" id="wGames"></div>
+      </div>
+      <div class="wpane" data-w="1">
+        <h3>Format &amp; competitive rules</h3>
+        <div class="wrow3">
+          <div><label class="fl">Structure</label><div class="orad" id="wStruct">
+            <button data-v="single" class="act"><b>Single elimination</b><span>Fast, brutal, broadcast-friendly</span></button>
+            <button data-v="double"><b>Double elimination</b><span>Upper + lower bracket</span></button>
+            <button data-v="rr"><b>Round robin → playoffs</b><span>Group stage, then knockout</span></button>
+          </div></div>
+          <div><label class="fl">Series format</label><div class="orad" id="wSeries">
+            <button data-v="BO1"><b>BO1</b><span>One map decides</span></button>
+            <button data-v="BO3" class="act"><b>BO3</b><span>Standard for playoffs</span></button>
+            <button data-v="BO5"><b>BO5</b><span>Applied to each match</span></button>
+          </div></div>
+          <div><label class="fl">Result review</label><p class="team-empty">Both teams confirm the same score. An assigned referee or authorized bracket staff member reviews it.</p></div>
+        </div>
+        <label class="fl">Map pool — click to toggle</label>
+        <div class="mapchips" id="wMaps" style="margin-top:6px"></div>
+        <div style="margin-top:20px"><label class="switch act" id="wAc"><span class="tr"></span>Anti-cheat required by event rules</label><small class="team-empty">This records the event requirement. TUNESF does not provide anti-cheat detection.</small></div>
+      </div>
+      <div class="wpane" data-w="2">
+        <h3>Schedule &amp; roster rules</h3>
+        <div class="wrow3">
+          <div><label class="fl">Start date</label><input type="date" id="wDate"></div>
+          <div><label class="fl">Max teams</label><input type="number" id="wMax" value="64" min="2" max="512"></div>
+          <div><label class="fl">Check-in window</label><select id="wCheck"><option>T-30 MIN</option><option selected>T-60 MIN</option><option>T-90 MIN</option></select></div>
+        </div>
+        <div class="wrow3">
+          <div><label class="fl">Roster size</label><select id="wRoster"><option>1v1</option><option>2v2</option><option selected>5v5</option><option>6v6</option></select></div>
+          <div><label class="fl">Substitutes allowed</label><select id="wSubs"><option>0</option><option selected>1</option><option>2</option><option>3</option></select></div>
+          <div><label class="fl">Roster lock</label><p class="team-empty">A team roster is snapshotted and locked when its captain registers it.</p></div>
+        </div>
+      </div>
+      <div class="wpane" data-w="3">
+        <h3>Prize pool &amp; schedule</h3>
+         <div class="wrow">
+          <div><label class="fl">Total prize pool (TND)</label><input type="number" id="wPrize" value="0" min="0" step="100" required></div>
+          <div><label class="fl">Event description</label><textarea id="wDescription" maxlength="2000" placeholder="Rules, eligibility, and event details"></textarea></div>
+         </div>
+        <div class="wrow" style="margin-top:18px">
+          <div><label class="fl" for="wFirstShare">First place share (%)</label><input id="wFirstShare" type="number" value="70" min="0" max="100" step="1"></div>
+          <div><label class="fl">Runner-up share (%)</label><input id="wSecondShare" type="number" value="30" readonly></div>
+        </div>
+        <div class="distbar" id="wDistBar"><i id="wFirstBar" style="width:70%;background:var(--gold)">1ST · 70%</i><i id="wSecondBar" style="width:30%;background:#d99f00">2ND · 30%</i></div>
+        <p class="mono" id="wDist" style="font-size:11px;color:var(--faint);letter-spacing:.06em"></p>
+      </div>
+      <div class="wpane" data-w="4">
+        <h3>Review &amp; publish</h3>
+        <div class="sumlist" id="wSum"></div>
+        <p style="color:var(--faint);font-size:12.5px;margin-top:16px">The tournament and its prize schedule are saved to TUNESF. Registration opens after the database accepts the event. Prize awards are recorded by placement; this site does not collect or transfer payments.</p>
+      </div>
+      <div class="wfoot">
+        <button class="btn btn-line btn-sm" id="wBack" disabled><i data-lucide="chevron-left"></i>Back</button>
+        <span class="wcount" id="wCount">STEP 1 / 5</span>
+        <button class="btn btn-gold btn-sm" id="wNext">Next<i data-lucide="chevron-right"></i></button>
+      </div>
+    </div>
+  </div>
+</div></section>
+</main>
+
+<footer><div class="wrap">
+  <div class="f-grid">
+    <div class="f-brand">
+      <a class="logo" href="index.html"><span class="js-logo-s"></span><span><b>TUNESF</b><small>ESPORTS FEDERATION</small></span></a>
+      <p>The national governing body for competitive gaming. Players compete, teams build their legacy, tournaments become legendary events.</p>
+    </div>
+    <div class="f-col"><b>Compete</b><a href="tournaments.html">Tournaments</a><a href="standings.html">Rankings</a><a href="bracket.html">Match center</a><a href="dashboard.html">Player dashboard</a></div>
+    <div class="f-col"><b>Organize</b><a href="organize.html">Host an event</a><a href="referee.html">Referee program</a><a href="organization.html">Clubs &amp; organizations</a><a href="roles.html">Federal rulebook</a></div>
+    <div class="f-col"><b>Governance</b><a href="roles.html">Roles &amp; permissions</a><a href="moderation.html">Moderation</a><a href="admin.html">Admin console</a><a href="login.html">Sign in</a></div>
+  </div>
+  <div class="f-bot"><span>© 2026 TUNESF — TUNISIAN ESPORTS FEDERATION</span><span>FAIR PLAY · VERIFIED ROSTERS · FEDERAL REFEREES</span></div>
+</div></footer>
+
+<script src="https://unpkg.com/lucide@1.47.0/dist/umd/lucide.min.js" integrity="sha384-v15JX+vZHMR3T6LQR9N6e6wIKrKOdNTbdj8j+e5irqq3L9gCauJz2vGlUzomWyUp" crossorigin="anonymous"></script>
+<script>if(!window.lucide){document.write('<script src="https://cdn.jsdelivr.net/npm/lucide@1.47.0/dist/umd/lucide.min.js" integrity="sha384-v15JX+vZHMR3T6LQR9N6e6wIKrKOdNTbdj8j+e5irqq3L9gCauJz2vGlUzomWyUp" crossorigin="anonymous"><\/script>')}</script>
+<script src="js/supabase-config.js?v=3"></script>
+<script src="js/core.js?v=20260924e"></script>
+<script src="js/organize.js"></script>
+</body>
+</html>

@@ -1,0 +1,60 @@
+/* Referee controls operate only on matches assigned to the signed-in official. */
+Auth.ready.then(async()=>{
+  if(!requirePerm('REFEREE_MATCHES'))return;
+  buildConsoleStrip();
+  const panel=document.querySelector('.dgrid2');if(!panel)return;
+  const date=value=>value?new Intl.DateTimeFormat(undefined,{dateStyle:'medium',timeStyle:'short'}).format(new Date(value)):'Unscheduled';
+  panel.innerHTML='<div id="refereeQueue" class="team-empty" style="grid-column:1/-1">Loading assigned matches...</div>';
+  const queue=$('#refereeQueue');
+  async function render(){
+    queue.innerHTML='Loading assigned matches...';
+    const {data:assignments,error}=await SUPA.client.from('match_officials').select('match_id').eq('user_id',Auth.user.id);
+    if(error)throw error;
+    const ids=[...new Set((assignments||[]).map(a=>a.match_id))];
+    if(!ids.length){queue.innerHTML='<div class="dcard" style="grid-column:1/-1"><div class="dh"><i data-lucide="gavel"></i>Referee assignments</div><div class="db"><p class="team-empty">You have no assigned matches.</p></div></div>';icons();return;}
+    const [matchResult,submissionResult,evidenceResult]=await Promise.all([
+      SUPA.client.from('tournament_matches').select('id,tournament_id,home_registration_id,away_registration_id,status,home_score,away_score,scheduled_at,round_number').in('id',ids).order('scheduled_at',{ascending:true,nullsFirst:false}),
+      SUPA.client.from('match_result_submissions').select('id,match_id,registration_id,home_score,away_score,status,created_at').in('match_id',ids).order('created_at',{ascending:false}),
+      SUPA.client.from('match_evidence').select('id,match_id,object_key,mime_type,byte_size,created_at').in('match_id',ids).order('created_at',{ascending:false})
+    ]);
+    if(matchResult.error)throw matchResult.error;if(submissionResult.error)throw submissionResult.error;if(evidenceResult.error)throw evidenceResult.error;
+    const matches=matchResult.data||[];
+    const evidenceRows=await Promise.all((evidenceResult.data||[]).map(async row=>{
+      const {data,error}=await SUPA.client.storage.from('match-evidence').createSignedUrl(row.object_key,120);
+      if(error)throw error;return {...row,url:data.signedUrl};
+    }));
+    const tournamentIds=[...new Set(matches.map(m=>m.tournament_id))];
+    const registrationIds=[...new Set(matches.flatMap(m=>[m.home_registration_id,m.away_registration_id]).filter(Boolean))];
+    const [tournaments,registrations]=await Promise.all([
+      tournamentIds.length?SUPA.client.from('tournaments').select('id,name,game,best_of').in('id',tournamentIds):{data:[],error:null},
+      registrationIds.length?SUPA.client.from('tournament_registrations').select('id,team_id').in('id',registrationIds):{data:[],error:null}
+    ]);
+    if(tournaments.error)throw tournaments.error;if(registrations.error)throw registrations.error;
+    const teamIds=[...new Set((registrations.data||[]).map(r=>r.team_id))];
+    const teams=teamIds.length?await SUPA.client.from('teams').select('id,name,tag').in('id',teamIds):{data:[],error:null};if(teams.error)throw teams.error;
+    const tMap=new Map((tournaments.data||[]).map(t=>[t.id,t])),rMap=new Map((registrations.data||[]).map(r=>[r.id,r.team_id])),teamMap=new Map((teams.data||[]).map(t=>[t.id,t]));
+    const label=id=>{const team=teamMap.get(rMap.get(id));return team?`${esc(team.name)} (${esc(team.tag)})`:'Team pending';};
+    queue.innerHTML=matches.map(match=>{
+      const tournament=tMap.get(match.tournament_id),subs=(submissionResult.data||[]).filter(s=>s.match_id===match.id&&s.status==='pending');
+      const evidence=evidenceRows.filter(row=>row.match_id===match.id);
+      const action={ready:'start',live:'pause',paused:'resume'}[match.status];
+      const actionButton=action?`<button class="btn btn-line btn-sm" type="button" data-referee-action="${action}" data-match="${esc(match.id)}">${action[0].toUpperCase()+action.slice(1)} match</button>`:'';
+      const incidentLink=`<a class="btn btn-line btn-sm" href="moderation.html?incident_match=${encodeURIComponent(match.id)}">File match incident</a>`;
+      const results=subs.length?`<h3 class="team-section-title">Pending score confirmations <span>${subs.length}</span></h3><ul class="team-invites">${subs.map(s=>`<li class="event-reg"><span><b>${label(match.home_registration_id)} ${s.home_score} - ${s.away_score} ${label(match.away_registration_id)}</b><small>Submitted ${esc(date(s.created_at))}</small></span><span class="event-actions"><button class="btn btn-gold btn-sm" type="button" data-review-result="accept" data-submission="${esc(s.id)}">Approve</button><button class="btn btn-line btn-sm" type="button" data-review-result="reject" data-submission="${esc(s.id)}">Reject</button></span></li>`).join('')}</ul>`:'<p class="team-empty">No pending score confirmation.</p>';
+      const evidenceHtml=evidence.length?`<h3 class="team-section-title">Match evidence <span>${evidence.length}</span></h3><ul class="team-invites">${evidence.map(row=>`<li class="event-reg"><span><b>${esc(row.mime_type)}</b><small>${fmt(row.byte_size)} bytes · ${esc(date(row.created_at))}</small></span><a class="btn btn-line btn-sm" href="${esc(row.url)}" target="_blank" rel="noopener noreferrer">Open evidence</a></li>`).join('')}</ul>`:'<p class="team-empty">No evidence attached.</p>';
+      return `<article class="dcard event-card"><div class="dh"><i data-lucide="gavel"></i>${esc(tournament?.name||'Tournament')}<span class="mono-r">${esc(match.status.replaceAll('_',' ').toUpperCase())}</span></div><div class="db"><div class="team-meta"><span>${esc(GAMES[tournament?.game]?.label||tournament?.game||'Game unavailable')}</span><span>Round ${match.round_number}</span><span>${esc(tournament?.best_of||'Series format unavailable')}</span><span>${esc(date(match.scheduled_at))}</span></div><h3 class="team-section-title">${label(match.home_registration_id)} vs ${label(match.away_registration_id)}</h3><div class="event-actions">${actionButton}${incidentLink}</div>${evidenceHtml}${results}</div></article>`;
+    }).join('');icons();
+  }
+  panel.addEventListener('click',async event=>{
+    const action=event.target.closest('[data-referee-action]');
+    const review=event.target.closest('[data-review-result]');const button=action||review;if(!button)return;button.disabled=true;
+    try{
+      const result=action
+        ?await SUPA.client.rpc('referee_match',{p_match_id:action.dataset.match,p_action:action.dataset.refereeAction,p_note:''})
+        :await SUPA.client.rpc('review_match_result',{p_submission_id:review.dataset.submission,p_decision:review.dataset.reviewResult,p_note:''});
+      if(result.error)throw result.error;toast('ok','Match updated','The action was recorded in the competition audit trail.');await render();
+    }catch(error){toast('err','Referee action failed',error.message||'Please check the assignment and try again.');button.disabled=false;}
+  });
+  try{await render();}catch(error){queue.innerHTML='<div class="dcard" style="grid-column:1/-1"><div class="dh">Referee queue unavailable</div><div class="db"><p>'+esc(error.message||'Please reload and try again.')+'</p></div></div>';}
+  icons();
+}).catch(error=>toast('err','Referee workspace unavailable',error?.message||'Please reload and try again.'));
