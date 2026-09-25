@@ -60,8 +60,9 @@ inForm.onsubmit=async event=>{
 
 $('#upForm').onsubmit=async event=>{
   event.preventDefault();
-  const username=$('#suUser').value.trim(), email=$('#suMail').value.trim(), password=$('#suPass').value;
+  const username=$('#suUser').value.trim(), discordUsername=$('#suDiscord').value.trim(), email=$('#suMail').value.trim(), password=$('#suPass').value;
   if(username.length<3){toast('err','Username too short','Use at least 3 characters.');$('#suUser').focus();return;}
+  if(discordUsername.length<2||discordUsername.length>64){toast('err','Discord username required','Enter your Discord username (2–64 characters).');$('#suDiscord').focus();return;}
   if(!email||!email.includes('@')){toast('err','Email required','Enter a valid email address.');$('#suMail').focus();return;}
   if(password.length<12){toast('err','Password too short','Use at least 12 characters for your account password.');$('#suPass').focus();return;}
   const submitButton=$('#suBtn');submitButton.disabled=true;
@@ -73,7 +74,7 @@ $('#upForm').onsubmit=async event=>{
   try{
     if(await usernameTaken()){toast('err','Username already in use','Choose a different public username.');$('#suUser').focus();return;}
     const {data,error}=await SUPA.client.auth.signUp({email,password,options:{
-      data:{username,player_name:username,game:'Not selected'},
+      data:{username,player_name:username,discord_username:discordUsername,game:'Not selected'},
       emailRedirectTo:new URL(redirectAfterAuth(),location.href).href
     }});
     if(error)throw error;

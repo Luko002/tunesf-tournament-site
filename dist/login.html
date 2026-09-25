@@ -69,6 +69,7 @@
 
     <form class="authform" id="upForm" style="display:none">
       <div><label class="fl" for="suUser">Public username</label><input id="suUser" autocomplete="username" minlength="3" maxlength="40" placeholder="Your public handle" required></div>
+      <div><label class="fl" for="suDiscord">Discord username</label><input id="suDiscord" name="discord_username" autocomplete="off" minlength="2" maxlength="64" placeholder="Your Discord username" required><small class="auth-help">Required so tournament staff can contact you about matches.</small></div>
       <div><label class="fl" for="suMail">Email</label><input id="suMail" type="email" autocomplete="email" placeholder="you@example.com" required></div>
       <div><label class="fl" for="suPass">Password</label><input id="suPass" type="password" autocomplete="new-password" minlength="12" placeholder="At least 12 characters" required></div>
       <p style="color:var(--faint);font-size:12px;margin-top:-4px">New accounts start as <b class="mono" style="color:var(--cyan)">PLAYER</b>. A player who creates a team becomes its team-scoped captain. Organization ownership and staff roles are separate scoped responsibilities.</p>
