@@ -126,7 +126,7 @@ const TMODAL_HTML=`<div class="overlay" id="tmodal"><div class="modal cut"><div 
   else if(SUPABASE_CONFIG.environment==='local'){const notice=document.createElement('div');notice.className='preview-notice';notice.setAttribute('role','status');notice.textContent='LOCAL TEST DATABASE · CHANGES ARE ISOLATED FROM PRODUCTION';ticker.insertAdjacentElement('afterend',notice);}
 })();
 
-function currentPage(){return(location.pathname.split('/').pop()||'index.html').toLowerCase();}
+function currentPage(){const page=location.pathname.split('/').filter(Boolean).pop()||'index';const normalized=page.toLowerCase();return normalized.endsWith('.html')?normalized:`${normalized}.html`;}
 function buildNav(){
   $$('.js-logo').forEach(el=>{el.innerHTML=logoSvg(34);});
   $$('.js-logo-s').forEach(el=>{el.innerHTML=logoSvg(30);});
