@@ -10,10 +10,10 @@ Auth.ready.then(async()=>{
   if(!panel)return;
   const isPlayer=Auth.user.roles.includes('PLAYER');
   panel.innerHTML=`
-    <section class="dcard" style="grid-column:1/-1">
-      <div class="dh"><i data-lucide="users-round"></i>Team workspace</div>
+    <section class="dcard team-create-card" style="grid-column:1/-1">
+      <details><summary class="dh"><i data-lucide="plus"></i>Create a new team</summary>
       <div class="db">
-        <p style="color:var(--dim);margin-bottom:16px">Create a team as a player. The creator becomes captain of that team only; team authority does not grant platform-wide permissions.</p>
+        <p style="color:var(--dim);margin-bottom:16px">The creator becomes captain of this team.</p>
         ${isPlayer?`<form id="teamCreateForm" class="team-create-form">
           <label><span>Team name</span><input name="name" minlength="2" maxlength="80" required placeholder="e.g. Tunisian squad"></label>
           <label><span>Short tag</span><input name="tag" minlength="2" maxlength="8" required placeholder="e.g. TNS"></label>
@@ -21,7 +21,7 @@ Auth.ready.then(async()=>{
           <label><span>Region</span><input name="region" maxlength="100" placeholder="e.g. Tunis"></label>
           <button class="btn btn-gold btn-sm" type="submit"><i data-lucide="plus"></i>Create team</button>
         </form>`:`<p class="team-empty">Your account does not have a PLAYER account role. Ask a federation administrator to review your account.</p>`}
-      </div>
+      </div></details>
     </section>
     <div id="teamCards" class="team-cards" style="grid-column:1/-1"><div class="team-empty">Loading your teams…</div></div>`;
   icons();
@@ -30,6 +30,8 @@ Auth.ready.then(async()=>{
   const fmtDate=value=>new Intl.DateTimeFormat(undefined,{dateStyle:'medium'}).format(new Date(value));
   const cards=$('#teamCards');
   let teams=[];
+  let selectedTeamId='',selectedTab='overview';
+  const selectedGames=new Map();
   const showError=(title,error)=>toast('err',title,error?.message||'Please try again.');
 
   async function loadTeams(){
@@ -80,7 +82,9 @@ Auth.ready.then(async()=>{
     const {data:profiles,error:profileError}=memberIds.length?await SUPA.client.from('public_profiles').select('id,discord_username').in('id',memberIds):{data:[],error:null};
     if(profileError)throw profileError;
     const discordById=new Map((profiles||[]).map(profile=>[profile.id,profile.discord_username]));
-    cards.innerHTML=results.map(({team,roster,rosterError,invites,invitesError,games,gamesError,gameRoster,gameRosterError,inbox,inboxError})=>{
+    if(!teams.some(team=>team.id===selectedTeamId))selectedTeamId=teams[0].id;
+    const tabs=[['overview','Overview'],['players','Players'],['games','Game rosters'],['matches','Matches'],['inbox','Inbox'],['invitations','Invitations']];
+    cards.innerHTML=`<label class="team-picker">Manage team<select id="captainTeamSelect" aria-label="Choose a team">${teams.map(team=>`<option value="${esc(team.id)}"${team.id===selectedTeamId?' selected':''}>${esc(team.name)} (${esc(team.tag)})</option>`).join('')}</select></label>`+results.map(({team,roster,rosterError,invites,invitesError,games,gamesError,gameRoster,gameRosterError,inbox,inboxError})=>{
       const active=roster.filter(row=>row.status==='active');
       const pending=invites.filter(inv=>!inv.revoked_at&&!inv.accepted_at&&new Date(inv.expires_at)>new Date());
       const rosterHtml=rosterError?'<p class="team-empty">Could not load this roster.</p>':active.length?`<ul class="team-roster">${active.map(row=>{
@@ -113,24 +117,30 @@ Auth.ready.then(async()=>{
         return `<li class="event-reg"><span><b>${esc(event.name)}</b><small>${esc(reg.status.replaceAll('_',' '))}${event.starts_at?' · '+esc(new Date(event.starts_at).toLocaleString()):''}</small></span>${checkin}</li>${matchHtml}`;
       }).join(''):'<li class="team-empty">This team has no tournament registrations.</li>';
       const pendingItems=invitesError?'<li class="team-empty">Could not load invitations.</li>':pending.length?pending.map(inv=>`<li data-pending-invitation="${esc(inv.invitation_id)}"><span><b>${esc(inv.member_role)}</b><small>Expires ${esc(fmtDate(inv.expires_at))}</small></span><button class="btn btn-line btn-sm" data-revoke="${esc(inv.invitation_id)}" data-team="${esc(team.id)}">Revoke</button></li>`).join(''):'<li class="team-empty">No pending invitations.</li>';
+      const availableGames=games.map(row=>row.game);
+      if(!availableGames.includes(selectedGames.get(team.id)))selectedGames.set(team.id,availableGames[0]);
       const gameRosterHtml=gameRosterError||gamesError?'<p class="team-empty">Could not load game rosters.</p>':games.map(({game})=>{
         const assigned=gameRoster.filter(row=>row.game===game);
-        return `<div class="club-roster"><b>${esc(gameName[game]||game)} <small>${assigned.length} players</small></b><div class="captain-game-assign">${active.map(member=>`<label><input type="checkbox" data-game-member="${esc(member.user_id)}" data-game="${esc(game)}" data-team="${esc(team.id)}"${assigned.some(row=>row.user_id===member.user_id)?' checked':''}>${esc(member.username||member.player_name||'Player')}</label>`).join('')}</div></div>`;
+        return `<div class="club-roster" data-game-panel="${esc(game)}"${game!==selectedGames.get(team.id)?' hidden':''}><b>${esc(gameName[game]||game)} <small>${assigned.length} players</small></b><div class="captain-game-assign">${active.map(member=>`<label><input type="checkbox" data-game-member="${esc(member.user_id)}" data-game="${esc(game)}" data-team="${esc(team.id)}"${assigned.some(row=>row.user_id===member.user_id)?' checked':''}>${esc(member.username||member.player_name||'Player')}</label>`).join('')}</div></div>`;
       }).join('')||'<p class="team-empty">Enable at least one game roster.</p>';
       const inboxHtml=inboxError?'<p class="team-empty">Could not load captain messages.</p>':inbox.length?`<div class="captain-inbox-list">${inbox.map(item=>`<article class="captain-inbox-item"><small>${item.item_type==='join_request'?'Join request':'Message'} · ${esc(item.username||'Player')} · ${esc(fmtDate(item.created_at))}${item.game?' · '+esc(gameName[item.game]||item.game):''}</small><p>${esc(item.message)}</p>${item.item_type==='join_request'&&item.status==='pending'?`<button class="btn btn-gold btn-sm" type="button" data-review-request="${esc(item.item_id)}" data-status="accepted">Accept</button><button class="btn btn-line btn-sm" type="button" data-review-request="${esc(item.item_id)}" data-status="declined">Decline</button>`:''}${item.item_type==='message'&&!item.read_at?`<button class="btn btn-line btn-sm" type="button" data-read-message="${esc(item.item_id)}">Mark read</button>`:''}</article>`).join('')}</div>`:'<p class="team-empty">No messages or join requests yet.</p>';
-      return `<article class="dcard team-card" data-team-card="${esc(team.id)}">
+      const attention=inbox.filter(item=>item.item_type==='join_request'&&item.status==='pending'||item.item_type==='message'&&!item.read_at).length;
+      return `<article class="dcard team-card" data-team-card="${esc(team.id)}"${team.id!==selectedTeamId?' hidden':''}>
         <div class="dh"><i data-lucide="shield"></i>${esc(team.name)}<span class="mono-r">${esc(team.tag)}</span></div>
         <div class="db"><div class="team-meta"><span>${esc(gameName[team.game]||team.game)}</span><span>${esc(team.region||'Region not set')}</span></div>
-          <h3 class="team-section-title">Active roster <span>${active.length}</span></h3>${rosterHtml}
-          <h3 class="team-section-title">Game rosters</h3>${gamesError?'':`<form class="captain-games-form" data-team-games="${esc(team.id)}">${Object.entries(gameName).map(([key,label])=>`<label><input type="checkbox" name="game" value="${esc(key)}"${games.some(g=>g.game===key)?' checked':''}${team.game===key?' disabled':''}>${esc(label)}${team.game===key?`<input type="hidden" name="game" value="${esc(key)}">`:''}</label>`).join('')}<button class="btn btn-line btn-sm" type="submit">Save games</button></form>`}${gameRosterHtml}
-          <h3 class="team-section-title">Player messages <span>${inbox.filter(item=>item.item_type==='join_request'&&item.status==='pending').length+inbox.filter(item=>item.item_type==='message'&&!item.read_at).length}</span></h3>${inboxHtml}
-          <h3 class="team-section-title">Tournament participation <span>${teamEvents.length}</span></h3><ul class="team-invites">${eventHtml}</ul>
+          <nav class="workspace-tabs" aria-label="Team sections">${tabs.map(([key,label])=>`<button type="button" data-workspace-tab="${key}" aria-pressed="${key===selectedTab}" class="${key===selectedTab?'active':''}">${label}${key==='inbox'&&attention?` <span>${attention}</span>`:''}</button>`).join('')}</nav>
+          <section data-workspace-panel="overview"${selectedTab!=='overview'?' hidden':''}><div class="team-snapshot"><div><b>${active.length}</b><small>Active members</small></div><div><b>${availableGames.length}</b><small>Games</small></div><div><b>${teamEvents.length}</b><small>Tournaments</small></div><div><b>${attention}</b><small>Need attention</small></div></div><p class="team-empty">Use the sections above to manage this team. Join requests and unread messages are in Inbox.</p></section>
+          <section data-workspace-panel="players"${selectedTab!=='players'?' hidden':''}><h3 class="team-section-title">Active players <span>${active.length}</span></h3>${rosterHtml}</section>
+          <section data-workspace-panel="games"${selectedTab!=='games'?' hidden':''}><h3 class="team-section-title">Game rosters</h3>${gamesError?'':`<form class="captain-games-form" data-team-games="${esc(team.id)}">${Object.entries(gameName).map(([key,label])=>`<label><input type="checkbox" name="game" value="${esc(key)}"${games.some(g=>g.game===key)?' checked':''}${team.game===key?' disabled':''}>${esc(label)}${team.game===key?`<input type="hidden" name="game" value="${esc(key)}">`:''}</label>`).join('')}<button class="btn btn-line btn-sm" type="submit">Save games</button></form>`}<div class="workspace-game-tabs" aria-label="Choose a game roster">${availableGames.map(game=>`<button type="button" data-game-tab="${esc(game)}" aria-pressed="${game===selectedGames.get(team.id)}" class="${game===selectedGames.get(team.id)?'active':''}">${esc(gameName[game]||game)}</button>`).join('')}</div>${gameRosterHtml}</section>
+          <section data-workspace-panel="matches"${selectedTab!=='matches'?' hidden':''}><h3 class="team-section-title">Tournament participation <span>${teamEvents.length}</span></h3><ul class="team-invites">${eventHtml}</ul></section>
+          <section data-workspace-panel="inbox"${selectedTab!=='inbox'?' hidden':''}><h3 class="team-section-title">Player messages <span>${attention}</span></h3>${inboxHtml}</section>
+          <section data-workspace-panel="invitations"${selectedTab!=='invitations'?' hidden':''}><h3 class="team-section-title">Invite players</h3>
           <form class="invite-create-form" data-invite-form="${esc(team.id)}">
             <label><span>Invite as</span><select name="member_role"><option value="player">Player</option><option value="substitute">Substitute</option></select></label>
             <button class="btn btn-line btn-sm" type="submit"><i data-lucide="link"></i>Create invite link</button>
           </form>
           <div class="invite-link-output" data-invite-output="${esc(team.id)}" hidden></div>
-          <h3 class="team-section-title">Pending invitations <span data-pending-count="${esc(team.id)}">${pending.length}</span></h3><ul class="team-invites" data-invites="${esc(team.id)}">${pendingItems}</ul>
+          <h3 class="team-section-title">Pending invitations <span data-pending-count="${esc(team.id)}">${pending.length}</span></h3><ul class="team-invites" data-invites="${esc(team.id)}">${pendingItems}</ul></section>
         </div>
       </article>`;
     }).join('');
@@ -138,6 +148,12 @@ Auth.ready.then(async()=>{
   }
 
   const createForm=$('#teamCreateForm');
+  panel.addEventListener('change',event=>{
+    if(event.target.id!=='captainTeamSelect')return;
+    selectedTeamId=event.target.value;
+    cards.querySelectorAll('[data-team-card]').forEach(card=>card.hidden=card.dataset.teamCard!==selectedTeamId);
+    cards.querySelector(`[data-team-card="${CSS.escape(selectedTeamId)}"] [data-workspace-tab="${selectedTab}"]`)?.click();
+  });
   createForm?.addEventListener('submit',async event=>{
     event.preventDefault();
     const button=createForm.querySelector('button[type="submit"]');
@@ -237,6 +253,22 @@ Auth.ready.then(async()=>{
   });
 
   panel.addEventListener('click',async event=>{
+    const tab=event.target.closest('[data-workspace-tab]');
+    if(tab){
+      selectedTab=tab.dataset.workspaceTab;
+      const card=tab.closest('[data-team-card]');
+      card.querySelectorAll('[data-workspace-tab]').forEach(button=>{button.classList.toggle('active',button===tab);button.setAttribute('aria-pressed',String(button===tab));});
+      card.querySelectorAll('[data-workspace-panel]').forEach(section=>section.hidden=section.dataset.workspacePanel!==selectedTab);
+      return;
+    }
+    const gameTab=event.target.closest('[data-game-tab]');
+    if(gameTab){
+      const card=gameTab.closest('[data-team-card]');
+      selectedGames.set(card.dataset.teamCard,gameTab.dataset.gameTab);
+      card.querySelectorAll('[data-game-tab]').forEach(button=>{button.classList.toggle('active',button===gameTab);button.setAttribute('aria-pressed',String(button===gameTab));});
+      card.querySelectorAll('[data-game-panel]').forEach(section=>section.hidden=section.dataset.gamePanel!==gameTab.dataset.gameTab);
+      return;
+    }
     const review=event.target.closest('[data-review-request]');
     if(review){
       review.disabled=true;
@@ -321,6 +353,7 @@ Auth.ready.then(async()=>{
       const {error}=await SUPA.client.rpc('set_team_game_member',{p_team_id:input.dataset.team,p_game:input.dataset.game,p_user_id:input.dataset.gameMember,p_active:input.checked});
       if(error)throw error;
       toast('ok','Game roster updated','The player assignment has been saved.');
+      try{await loadTeams();}catch(refreshError){showError('Game roster saved, but the workspace did not refresh',refreshError);}
     }catch(error){input.checked=!input.checked;showError('Could not update game roster',error);}
     finally{input.disabled=false;}
   });

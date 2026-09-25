@@ -6,13 +6,10 @@ Auth.ready.then(async()=>{
   const wrap=document.querySelector('main .sec.tight .wrap');
   if(!wrap)return;
   wrap.innerHTML=`<div class="console-strip" id="consoleStrip"></div>
-    <div class="dcard" style="margin-top:22px"><div class="dh"><i data-lucide="user-round"></i>Player workspace</div><div class="db">
-      <p style="color:var(--dim)">View the teams you belong to and the rosters you play with. Accept an invitation from its secure link.</p>
-      <form id="playerDiscordForm" class="club-contact" style="margin-top:12px"><label><span>Discord username</span><input name="discord_username" minlength="2" maxlength="64" value="${esc(Auth.user.discordUsername||'')}" placeholder="Your Discord username" required></label><button class="btn btn-line btn-sm" type="submit">Save Discord</button></form>
-      <a class="btn btn-gold btn-sm" href="captain.html" style="margin-top:16px"><i data-lucide="users-round"></i>Create or manage a team</a>
-    </div></div>
     <section class="dcard event-card personal-match-schedule"><div class="dh"><i data-lucide="calendar-clock"></i>My match schedule</div><div class="db" id="playerMatches" aria-live="polite"><p class="team-empty">Loading your matches…</p></div></section>
-    <section class="player-team-list" id="playerTeams" aria-live="polite"><div class="team-empty">Loading your teams…</div></section>`;
+    <div class="player-section-heading"><h2>My teams</h2><a class="btn btn-gold btn-sm" href="captain.html"><i data-lucide="users-round"></i>Create or manage a team</a></div>
+    <section class="player-team-list" id="playerTeams" aria-live="polite"><div class="team-empty">Loading your teams…</div></section>
+    <details class="dcard player-profile"><summary class="dh"><i data-lucide="user-round"></i>Player profile</summary><div class="db"><p class="team-empty">Your Discord name appears on your team rosters.</p><form id="playerDiscordForm" class="club-contact"><label><span>Discord username</span><input name="discord_username" minlength="2" maxlength="64" value="${esc(Auth.user.discordUsername||'')}" placeholder="Your Discord username" required></label><button class="btn btn-line btn-sm" type="submit">Save Discord</button></form></div></details>`;
   const list=$('#playerTeams');
   const matchHost=$('#playerMatches');
   wrap.querySelector('#playerDiscordForm').addEventListener('submit',async event=>{
@@ -54,7 +51,7 @@ Auth.ready.then(async()=>{
       .eq('user_id',Auth.user.id).eq('status','active');
     if(error)throw error;
     const ids=[...new Set((memberships||[]).map(row=>row.team_id))];
-    if(!ids.length){list.innerHTML='<div class="dcard"><div class="dh"><i data-lucide="users-round"></i>Your teams</div><div class="db"><p class="team-empty">You are not on a team yet. Use a captain’s invitation link to join one.</p></div></div>';icons();return;}
+    if(!ids.length){list.innerHTML='<div class="dcard"><div class="dh"><i data-lucide="users-round"></i>No teams yet</div><div class="db"><p class="team-empty">Accept a captain’s invitation link to join a team, or create your own team.</p></div></div>';icons();return;}
     const {data:teams, error:teamsError}=await SUPA.client.from('teams')
       .select('id,name,tag,game,region').in('id',ids);
     if(teamsError)throw teamsError;
