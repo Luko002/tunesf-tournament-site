@@ -39,7 +39,7 @@ const SUPABASE_CONFIG=Object.assign({url:'',anonKey:''},window.TUNESF_SUPABASE||
 const SUPA={client:null};
 const LOCAL_ORIGIN=location.protocol==='file:'||['localhost','127.0.0.1'].includes(location.hostname);
 const READ_ONLY_PREVIEW=SUPABASE_CONFIG.environment==='production'&&LOCAL_ORIGIN;
-const READ_ONLY_RPCS=new Set(['get_my_roles','get_my_permissions','list_team_roster','list_team_invitations','list_public_clubs','list_public_team_rosters','get_team_captain_inbox']);
+const READ_ONLY_RPCS=new Set(['get_my_roles','get_my_permissions','list_team_roster','list_team_invitations','list_public_clubs','list_public_team_rosters','get_team_captain_inbox','list_organizations_for_current_user']);
 function supabaseFetch(input,init){
   if(!READ_ONLY_PREVIEW)return fetch(input,init);
   const url=new URL(input instanceof Request?input.url:String(input),SUPABASE_CONFIG.url);
