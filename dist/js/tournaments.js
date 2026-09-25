@@ -3,7 +3,7 @@
    ============================================================= */
 boot(()=>{
 let FILT={game:'all',status:'all',sort:'feat'};
-const TABS=[['all','ALL GAMES'],['cs2','CS2'],['val','VALORANT'],['lol','LOL'],['rl','ROCKET LEAGUE'],['eafc','EA FC']];
+const TABS=[['all','ALL GAMES'],['cs2','CS2'],['val','VALORANT'],['lol','LOL'],['rl','ROCKET LEAGUE'],['mlbb','MLBB'],['eafc','EA FC'],['efootball','EFOOTBALL']];
 
 function renderT(){
   let list=TOURN.filter(t=>(FILT.game==='all'||t.game===FILT.game)&&(FILT.status==='all'||t.status===FILT.status));

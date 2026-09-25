@@ -17,7 +17,7 @@ function toast(type,title,msg){
 const GAMES={
   cs2:{label:'Counter-Strike 2',icon:'crosshair',maps:['Ancient','Anubis','Inferno','Mirage','Nuke','Overpass','Vertigo']},
   val:{label:'VALORANT',icon:'zap',maps:['Ascent','Bind','Haven','Lotus','Split','Icebox','Sunset']},
-  lol:{label:'League of Legends',icon:'swords',maps:[]},rl:{label:'Rocket League',icon:'car',maps:[]},eafc:{label:'EA SPORTS FC',icon:'goal',maps:[]}
+  lol:{label:'League of Legends',icon:'swords',maps:[]},rl:{label:'Rocket League',icon:'car',maps:[]},mlbb:{label:'Mobile Legends: Bang Bang',icon:'gamepad-2',maps:[]},eafc:{label:'EA SPORTS FC',icon:'goal',maps:[]},efootball:{label:'eFootball',icon:'goal',maps:[]}
 };
 const TOURN=[];
 const ROLE_ORDER=[];

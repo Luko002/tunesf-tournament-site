@@ -27,7 +27,7 @@ async function loadOrganizations(){
 loadOrganizations();
 
 $('#wRail').innerHTML=WSTEPS.map((t,i)=>`<div class="wstep" data-i="${i}"><i>${i+1}</i><b>${t}</b></div>`).join('');
-$('#wGames').innerHTML=[['cs2','crosshair'],['val','zap'],['lol','swords'],['rl','car'],['eafc','goal']]
+$('#wGames').innerHTML=[['cs2','crosshair'],['val','zap'],['lol','swords'],['rl','car'],['mlbb','gamepad-2'],['eafc','goal'],['efootball','goal']]
   .map(([g,ic])=>`<button class="gtile" data-g="${g}"><i data-lucide="${ic}"></i>${GAMES[g].label}</button>`).join('');
 function renderMaps(){
   const maps=GAMES[WSEL.game||'cs2'].maps||[];
