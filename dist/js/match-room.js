@@ -8,6 +8,7 @@ Auth.ready.then(async()=>{
   if(!matchId){roomError('Open this room from a scheduled match.');return;}
 
   let room=null,chatBusy=false,lastMessageIds='',latestResultSignature='',selectedStep=null,lastActiveStep=-1;
+  const signatureFor=(match,reports)=>JSON.stringify({status:match.status,scheduled_at:match.scheduled_at,home_score:match.home_score,away_score:match.away_score,teams:(match.teams||[]).map(team=>[team.team_id,team.confirmed]),veto:match.veto||[],reports});
   const loadRoom=async()=>{
     const {data,error}=await SUPA.client.rpc('get_match_room',{p_match_id:matchId});
     if(error)throw error;
@@ -25,7 +26,7 @@ Auth.ready.then(async()=>{
     const openSidePick=isValorant&&picks.find(item=>!item.side_choice);
     const vetoComplete=!!decider&&(!isValorant||!!decider.side_choice);
     const bothConfirmed=!!home?.confirmed&&!!away?.confirmed;
-    const activeStep=['live','result_pending','disputed','completed','forfeit'].includes(room.status)?3:!bothConfirmed?0:mapPool.length>=2&&!vetoComplete?1:2;
+    const activeStep=!bothConfirmed?0:mapPool.length>=2&&!vetoComplete?1:2;
     if(selectedStep===null||activeStep!==lastActiveStep)selectedStep=activeStep;
     lastActiveStep=activeStep;
     const [matchResult,reportResult,evidenceResult]=await Promise.all([
@@ -58,7 +59,7 @@ Auth.ready.then(async()=>{
       const action=team.confirmed?'':isCaptain&&room.status==='ready'?`<button class="btn btn-gold btn-sm room-confirm" type="button" data-confirm-roster="${esc(team.side)}"><i data-lucide="check"></i>Confirm roster</button>`:'';
       return `<article class="room-roster-card${team.confirmed?' is-confirmed':''}"><div class="room-roster-team"><span class="room-team-mark">${esc((team.tag||team.name||'T').slice(0,3).toUpperCase())}</span><b>${esc(team.name||'Team')}${isCaptain?' · You':''}</b></div><ul class="room-roster-list">${members}</ul><p class="room-roster-status">${status}</p>${action}</article>`;
     };
-    const stepMarkup=['Roster',mapPool.length>=2?'Map veto':'No veto','Ready','Result'].map((name,index)=>`<button type="button" class="room-step${index===selectedStep?' active':''}${index===activeStep?' current':''}" data-room-step="${index}" aria-pressed="${index===selectedStep}"${index>activeStep||index===1&&mapPool.length<2?' disabled':''}><i>${index+1}</i>${name}</button>`).join('');
+    const stepMarkup=['Roster',mapPool.length>=2?'Map veto':'No veto','Result'].map((name,index)=>`<button type="button" class="room-step${index===selectedStep?' active':''}${index===activeStep?' current':''}" data-room-step="${index}" aria-pressed="${index===selectedStep}"${index>activeStep||index===1&&mapPool.length<2?' disabled':''}><i>${index+1}</i>${name}</button>`).join('');
     const vetoMarkup=()=>{
       if(!bothConfirmed)return '';
       if(mapPool.length<2)return `<section class="room-veto"><h2 class="room-roster-heading">Map veto unavailable</h2><p class="room-veto-note">The tournament organizer needs to configure its map pool before teams can veto.</p></section>`;
@@ -134,11 +135,7 @@ Auth.ready.then(async()=>{
     let vetoPanel=body.querySelector(':scope > .room-veto');
     if(!vetoPanel){vetoPanel=document.createElement('section');vetoPanel.className='room-veto';vetoPanel.innerHTML='<h2 class="room-roster-heading">Map veto</h2><p class="team-empty">Both captains must confirm their rosters first.</p>';body.append(vetoPanel);}
     vetoPanel.dataset.roomPanel='1';
-    const readyPanel=document.createElement('section');
-    readyPanel.className='room-ready';readyPanel.dataset.roomPanel='2';
-    readyPanel.innerHTML=`<h2 class="room-roster-heading">Ready to play</h2><p>${esc(room.status==='ready'?`Both rosters are confirmed. ${mapPool.length>=2?'The map veto is complete.':'No map veto is required.'} Waiting for the referee to start the match.`:'The match has moved beyond the ready stage.')}</p><p class="team-empty">${room.scheduled_at?`Scheduled ${esc(new Intl.DateTimeFormat(undefined,{dateStyle:'medium',timeStyle:'short'}).format(new Date(room.scheduled_at)))}`:'Match time to be announced.'}</p>`;
-    body.insertBefore(readyPanel,body.querySelector(':scope > .room-result'));
-    body.querySelector(':scope > .room-result').dataset.roomPanel='3';
+    body.querySelector(':scope > .room-result').dataset.roomPanel='2';
     const showStep=step=>{
       selectedStep=step;
       body.querySelectorAll('[data-room-panel]').forEach(panel=>panel.hidden=Number(panel.dataset.roomPanel)!==step);
@@ -150,7 +147,7 @@ Auth.ready.then(async()=>{
       button.disabled=true;
       try{
         const {error}=await SUPA.client.rpc('confirm_match_roster',{p_match_id:matchId});if(error)throw error;
-        toast('ok','Roster confirmed','Your match roster is now locked in.');await loadRoom();
+        toast('ok','Roster confirmed','Your match roster is now locked in.');await loadRoom();await loadMessages(true);
       }catch(error){toast('err','Could not confirm roster',error.message||'Please try again.');button.disabled=false;}
     }));
     host.querySelectorAll('[data-veto-action][data-map-name]').forEach(button=>button.addEventListener('click',async()=>{
@@ -158,7 +155,7 @@ Auth.ready.then(async()=>{
       const action=button.dataset.vetoAction,mapName=button.dataset.mapName||null;
       try{
         const {error}=await SUPA.client.rpc('submit_match_veto_action',{p_match_id:matchId,p_action:action,p_map_name:mapName,p_side:null});if(error)throw error;
-        toast('ok',action==='ban'?'Map banned':`Map ${picks.length+1} selected`,mapName||'Veto updated.');await loadRoom();
+        toast('ok',action==='ban'?'Map banned':`Map ${picks.length+1} selected`,mapName||'Veto updated.');await loadRoom();await loadMessages(true);
       }catch(error){toast('err','Veto action failed',error.message||'Please try again.');button.disabled=false;}
     }));
     host.querySelectorAll('[data-veto-side]').forEach(button=>button.addEventListener('click',async()=>{
@@ -166,7 +163,7 @@ Auth.ready.then(async()=>{
       const action=button.dataset.vetoAction;
       try{
         const {error}=await SUPA.client.rpc('submit_match_veto_action',{p_match_id:matchId,p_action:action,p_map_name:null,p_side:button.dataset.vetoSide});if(error)throw error;
-        toast('ok','Starting side saved',`Map side set to ${button.dataset.vetoSide}.`);await loadRoom();
+        toast('ok','Starting side saved',`Map side set to ${button.dataset.vetoSide}.`);await loadRoom();await loadMessages(true);
       }catch(error){toast('err','Could not set starting side',error.message||'Please try again.');button.disabled=false;}
     }));
     $('#roomResultForm')?.addEventListener('submit',async event=>{
@@ -186,14 +183,14 @@ Auth.ready.then(async()=>{
         const {error}=await SUPA.client.rpc('submit_match_result',{p_match_id:matchId,p_home_score:Number(values.get('home_score')),p_away_score:Number(values.get('away_score')),p_evidence_object_keys:keys});
         if(error)throw error;
         toast('ok','Result submitted','Your team’s result is waiting for referee review.');
-        await loadRoom();
-        roomSignature=JSON.stringify({status:room.status,teams:(room.teams||[]).map(team=>[team.team_id,team.confirmed]),veto:room.veto||[],reports:latestResultSignature});
+        await loadRoom();await loadMessages(true);
+        roomSignature=signatureFor(room,latestResultSignature);
       }catch(error){if(keys.length)await SUPA.client.storage.from('match-evidence').remove(keys).catch(()=>{});toast('err','Could not submit result',error.message||'Please try again.');button.disabled=false;}
     });
     $('#roomChatForm').addEventListener('submit',async event=>{
       event.preventDefault();const input=$('#roomChatInput'),body=input.value.trim();
       if(!body)return;
-      const button=event.submitter;button.disabled=true;
+      const button=event.currentTarget.querySelector('button[type="submit"]');button.disabled=true;
       try{
         const {error}=await SUPA.client.from('match_chat_messages').insert({match_id:matchId,sender_id:Auth.user.id,body});if(error)throw error;
         input.value='';await loadMessages(true);
@@ -230,13 +227,13 @@ Auth.ready.then(async()=>{
     const {data,error}=await SUPA.client.rpc('get_match_room',{p_match_id:matchId});if(error)throw error;
     const {data:reports,error:reportError}=await SUPA.client.from('match_result_submissions').select('id,status,home_score,away_score').eq('match_id',matchId).order('created_at');
     if(reportError)throw reportError;
-    const signature=JSON.stringify({status:data.status,teams:(data.teams||[]).map(team=>[team.team_id,team.confirmed]),veto:data.veto||[],reports:(reports||[]).map(row=>[row.id,row.status,row.home_score,row.away_score])});
+    const signature=signatureFor(data,JSON.stringify((reports||[]).map(row=>[row.id,row.status,row.home_score,row.away_score])));
     if(signature===roomSignature)return;
     const input=$('#roomChatInput'),draft=input?.value||'',focused=document.activeElement===input;
     await loadRoom();await loadMessages(true);
     const refreshedInput=$('#roomChatInput');if(refreshedInput){refreshedInput.value=draft;if(focused)refreshedInput.focus();}
-    roomSignature=JSON.stringify({status:room.status,teams:(room.teams||[]).map(team=>[team.team_id,team.confirmed]),veto:room.veto||[],reports:latestResultSignature});
+    roomSignature=signatureFor(room,latestResultSignature);
   };
-  try{await loadRoom();roomSignature=JSON.stringify({status:room.status,teams:(room.teams||[]).map(team=>[team.team_id,team.confirmed]),veto:room.veto||[],reports:latestResultSignature});await loadMessages(true);setInterval(()=>{loadMessages(false);refreshRoom().catch(error=>console.warn('Match room refresh failed:',error));},3500);}
+  try{await loadRoom();roomSignature=signatureFor(room,latestResultSignature);await loadMessages(true);let polling=false;setInterval(async()=>{if(polling)return;polling=true;try{await refreshRoom();await loadMessages(false);}catch(error){console.warn('Match room refresh failed:',error);}finally{polling=false;}},3500);}
   catch(error){roomError(error.message||'You need to be part of this match to open its room.');}
 }).catch(error=>roomError(error.message||'Please sign in and try again.'));

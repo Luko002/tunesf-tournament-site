@@ -4,8 +4,10 @@ Auth.ready.then(async()=>{
   buildConsoleStrip();
   const host=$('#eventList');
   const seedOrders=new Map();
+  const selectedTabs=new Map();
   const setError=error=>{host.innerHTML=`<div class="dcard" style="grid-column:1/-1"><div class="dh">Could not load tournament operations</div><div class="db"><p>${esc(error?.message||'Please try again.')}</p></div></div>`;};
   const date=value=>value?new Intl.DateTimeFormat(undefined,{dateStyle:'medium',timeStyle:'short'}).format(new Date(value)):'Date to be announced';
+  const localDateTime=value=>{if(!value)return '';const d=new Date(value);return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,16);};
   async function details(event){
     const [regResult,stageResult]=await Promise.all([
       SUPA.client.from('tournament_registrations').select('id,team_id,status,created_at').eq('tournament_id',event.id).order('created_at'),
@@ -17,15 +19,16 @@ Auth.ready.then(async()=>{
     if(ids.length){const result=await SUPA.client.from('teams').select('id,name,tag').in('id',ids);if(result.error)throw result.error;teams=result.data||[];}
     const byTeam=new Map(teams.map(team=>[team.id,team]));
     const stages=stageResult.data||[];
-    const [standingsResult,refereeResult]=await Promise.all([
+    const [standingsResult,refereeResult,matchResult]=await Promise.all([
       stages.some(stage=>stage.format==='round_robin')
         ?SUPA.client.from('tournament_standings').select('stage_id,registration_id,played,wins,draws,losses,points,score_for,score_against,rank').in('stage_id',stages.filter(stage=>stage.format==='round_robin').map(stage=>stage.id))
         :{data:[],error:null},
-      SUPA.client.rpc('list_tournament_referees',{p_tournament_id:event.id})
+      SUPA.client.rpc('list_tournament_referees',{p_tournament_id:event.id}),
+      stages.length?SUPA.client.from('tournament_matches').select('id,stage_id,round_number,position,home_registration_id,away_registration_id,status,scheduled_at,home_score,away_score').in('stage_id',stages.map(stage=>stage.id)).order('round_number').order('position'):{data:[],error:null}
     ]);
-    if(standingsResult.error)throw standingsResult.error;if(refereeResult.error)throw refereeResult.error;
+    if(standingsResult.error)throw standingsResult.error;if(refereeResult.error)throw refereeResult.error;if(matchResult.error)throw matchResult.error;
     return {event,regs:regs.map(row=>({...row,team:byTeam.get(row.team_id)})),stages,
-      standings:standingsResult.data||[],referees:refereeResult.data||[]};
+      standings:standingsResult.data||[],referees:refereeResult.data||[],matches:matchResult.data||[]};
   }
   async function render(){
     host.innerHTML='<div class="team-empty">Loading your tournaments…</div>';
@@ -33,7 +36,7 @@ Auth.ready.then(async()=>{
     if(error)throw error;
     const items=await Promise.all((data||[]).map(details));
     if(!items.length){host.innerHTML='<div class="dcard" style="grid-column:1/-1"><div class="dh"><i data-lucide="clipboard-list"></i>Your tournament assignments</div><div class="db"><p class="team-empty">No tournaments are assigned to you. Create an event or ask an organizer to add you to its staff.</p><a class="btn btn-line btn-sm" href="organize.html" style="margin-top:14px">Create a tournament</a></div></div>';icons();return;}
-    host.innerHTML=items.map(({event,regs,stages,standings,referees})=>{
+    host.innerHTML=items.map(({event,regs,stages,standings,referees,matches})=>{
       const approved=regs.filter(r=>['approved','checked_in'].includes(r.status));
       const hasPublished=stages.some(s=>s.status==='published');
       const pending=regs.filter(r=>r.status==='pending');
@@ -77,12 +80,32 @@ Auth.ready.then(async()=>{
         }).join('');
         return `<section class="event-admin-tools"><h3 class="team-section-title">${esc(stage.name)} standings <small>Manual changes are saved and remain after match updates. Rank recalculates from points and score difference.</small></h3>${rows||'<p class="team-empty">No approved teams to show.</p>'}</section>`;
       }).join('');
-      return `<article class="dcard event-card" data-event-card="${esc(event.id)}"><div class="dh"><i data-lucide="trophy"></i>${esc(event.name)}<span class="mono-r">${esc(event.status.replaceAll('_',' ').toUpperCase())}</span></div><div class="db"><div class="team-meta"><span>${esc(GAMES[event.game]?.label||event.game)}</span><span>${esc(String(event.format).replaceAll('_',' '))}</span><span>Starts ${esc(date(event.starts_at))}</span><span>${approved.length}/${regs.length} approved</span></div><h3 class="team-section-title">Team registrations <span>${pending.length} pending</span></h3><ul class="team-invites">${regRows}</ul>${seedRows}${standingsControls}${refereeControl}${stages.length?`<p class="team-empty">Stages: ${stages.map(s=>`${esc(s.name)} · ${esc(s.format.replaceAll('_',' '))} · ${esc(s.status)}`).join(' / ')}</p>`:''}<div class="event-actions">${actions.join('')}</div></div></article>`;
+      const registrationById=new Map(regs.map(reg=>[reg.id,reg]));
+      const matchRows=matches.map(match=>{
+        const home=registrationById.get(match.home_registration_id)?.team?.name||'Team pending';
+        const away=registrationById.get(match.away_registration_id)?.team?.name||'Team pending';
+        const stage=stages.find(row=>row.id===match.stage_id);
+        const refereeAction={ready:'start',live:'pause',paused:'resume'}[match.status];
+        const scoreEnabled=match.home_registration_id&&match.away_registration_id&&['ready','live','paused','result_pending','completed'].includes(match.status);
+        return `<article class="event-op-match"><div class="event-op-match-head"><b>${esc(home)} <span>vs</span> ${esc(away)}</b><small>${esc(stage?.name||'Stage')} · Round ${match.round_number} · Match ${match.position} · ${esc(match.status.replaceAll('_',' '))}</small></div><div class="event-op-match-actions"><a class="btn btn-line btn-sm" href="match-room.html?id=${encodeURIComponent(match.id)}">Open match room</a>${refereeAction?`<button class="btn btn-line btn-sm" type="button" data-event-action="match_status" data-event="${esc(event.id)}" data-match="${esc(match.id)}" data-status="${refereeAction}">${refereeAction[0].toUpperCase()+refereeAction.slice(1)} match</button>`:''}</div>${['pending','ready'].includes(match.status)?`<form class="event-op-form" data-match-schedule="${esc(match.id)}"><label>Match time<input type="datetime-local" name="scheduled_at" value="${esc(localDateTime(match.scheduled_at))}" required></label><button class="btn btn-line btn-sm" type="button" data-event-action="schedule_match" data-event="${esc(event.id)}">Save time</button></form>`:`<p class="team-empty">${esc(date(match.scheduled_at))}</p>`}${scoreEnabled?`<form class="event-op-form" data-match-result="${esc(match.id)}"><label>Home wins<input type="number" name="home_score" min="0" max="4" value="${match.home_score??''}" required></label><label>Away wins<input type="number" name="away_score" min="0" max="4" value="${match.away_score??''}" required></label><label class="event-op-reason">Reason for official result<input name="reason" minlength="5" maxlength="500" placeholder="e.g. Referee verified the final score" required></label><button class="btn btn-gold btn-sm" type="button" data-event-action="record_result" data-event="${esc(event.id)}">${match.status==='completed'?'Correct result':'Record result'}</button></form>`:''}</article>`;
+      }).join('')||'<p class="team-empty">Matches appear here after the bracket is published.</p>';
+      const selected=selectedTabs.get(event.id)||(!matches.length?'registrations':'matches');
+      const tabs=[['registrations','Registrations'],['matches',`Matches (${matches.length})`],['standings','Standings'],['officials','Referee'],['event','Event']];
+      return `<article class="dcard event-card event-ops-card" data-event-card="${esc(event.id)}"><div class="dh"><i data-lucide="trophy"></i>${esc(event.name)}<span class="mono-r">${esc(event.status.replaceAll('_',' ').toUpperCase())}</span></div><div class="db"><div class="team-meta"><span>${esc(GAMES[event.game]?.label||event.game)}</span><span>${esc(String(event.format).replaceAll('_',' '))}</span><span>Starts ${esc(date(event.starts_at))}</span><span>${approved.length}/${regs.length} approved</span></div><nav class="event-ops-tabs" aria-label="Tournament operations sections">${tabs.map(([key,label])=>`<button type="button" data-ops-tab="${key}" aria-pressed="${key===selected}" class="${key===selected?'active':''}">${label}</button>`).join('')}</nav><section class="event-ops-panel" data-ops-panel="registrations"${selected!=='registrations'?' hidden':''}><h3 class="team-section-title">Team registrations <span>${pending.length} pending</span></h3><ul class="team-invites">${regRows}</ul>${seedRows}</section><section class="event-ops-panel" data-ops-panel="matches"${selected!=='matches'?' hidden':''}><h3 class="team-section-title">Match schedule and results <span>${matches.length}</span></h3>${matchRows}</section><section class="event-ops-panel" data-ops-panel="standings"${selected!=='standings'?' hidden':''}><div class="event-standings-scroll">${standingsControls||'<p class="team-empty">This tournament has no round robin stage.</p>'}</div></section><section class="event-ops-panel" data-ops-panel="officials"${selected!=='officials'?' hidden':''}>${refereeControl}</section><section class="event-ops-panel" data-ops-panel="event"${selected!=='event'?' hidden':''}>${stages.length?`<p class="team-empty">Stages: ${stages.map(s=>`${esc(s.name)} · ${esc(s.format.replaceAll('_',' '))} · ${esc(s.status)}`).join(' / ')}</p>`:''}<div class="event-actions">${actions.join('')}</div></section></div></article>`;
     }).join('');
     icons();
   }
   host.addEventListener('click',async event=>{
+    const tab=event.target.closest('[data-ops-tab]');
+    if(tab){
+      const card=tab.closest('[data-event-card]');selectedTabs.set(card.dataset.eventCard,tab.dataset.opsTab);
+      card.querySelectorAll('[data-ops-tab]').forEach(button=>{button.classList.toggle('active',button===tab);button.setAttribute('aria-pressed',String(button===tab));});
+      card.querySelectorAll('[data-ops-panel]').forEach(panel=>panel.hidden=panel.dataset.opsPanel!==tab.dataset.opsTab);
+      return;
+    }
     const button=event.target.closest('[data-event-action]');if(!button)return;
+    const matchForm=button.closest('[data-match-schedule],[data-match-result]');
+    if(matchForm&&!matchForm.reportValidity())return;
     button.disabled=true;const id=button.dataset.event,action=button.dataset.eventAction;
     try{
       let result;
@@ -103,6 +126,18 @@ Auth.ready.then(async()=>{
             p_points:Number(values.points),p_score_for:Number(values.score_for),p_score_against:Number(values.score_against)})
           :await SUPA.client.rpc('reset_tournament_standing',{p_stage_id:form.dataset.stage,p_registration_id:form.dataset.registration});
       }
+      else if(action==='schedule_match'){
+        const form=button.closest('[data-match-schedule]');
+        const scheduledAt=new Date(new FormData(form).get('scheduled_at'));
+        if(!Number.isFinite(scheduledAt.getTime()))throw new Error('Choose a valid match time.');
+        result=await SUPA.client.rpc('schedule_match',{p_match_id:form.dataset.matchSchedule,p_scheduled_at:scheduledAt.toISOString()});
+      }
+      else if(action==='record_result'){
+        const form=button.closest('[data-match-result]'),values=new FormData(form);
+        if(!window.confirm('Record this official match score? The bracket or standings may advance.')){button.disabled=false;return;}
+        result=await SUPA.client.rpc('record_official_match_result',{p_match_id:form.dataset.matchResult,p_home_score:Number(values.get('home_score')),p_away_score:Number(values.get('away_score')),p_reason:String(values.get('reason')||'').trim()});
+      }
+      else if(action==='match_status')result=await SUPA.client.rpc('referee_match',{p_match_id:button.dataset.match,p_action:button.dataset.status,p_note:''});
       else if(action==='review_registration')result=await SUPA.client.rpc('review_registration',{p_registration_id:button.dataset.registration,p_new_status:button.dataset.status});
       else if(action==='transition')result=await SUPA.client.rpc('transition_tournament',{p_tournament_id:id,p_new_status:button.dataset.status});
       else if(action==='generate_bracket'){
@@ -122,5 +157,6 @@ Auth.ready.then(async()=>{
       await render();
     }catch(error){toast('err','Tournament action failed',error.message||'Please check your assignment and try again.');button.disabled=false;}
   });
+  host.addEventListener('submit',event=>{const form=event.target.closest('[data-match-schedule],[data-match-result]');if(form){event.preventDefault();form.querySelector('[data-event-action]')?.click();}});
   try{await render();}catch(error){setError(error);}
 }).catch(error=>toast('err','Tournament operations unavailable',error.message||'Please reload and try again.'));
