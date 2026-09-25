@@ -8,12 +8,27 @@ Auth.ready.then(async()=>{
   wrap.innerHTML=`<div class="console-strip" id="consoleStrip"></div>
     <div class="dcard" style="margin-top:22px"><div class="dh"><i data-lucide="user-round"></i>Player workspace</div><div class="db">
       <p style="color:var(--dim)">View the teams you belong to and the rosters you play with. Accept an invitation from its secure link.</p>
+      <form id="playerDiscordForm" class="club-contact" style="margin-top:12px"><label><span>Discord username</span><input name="discord_username" minlength="2" maxlength="64" value="${esc(Auth.user.discordUsername||'')}" placeholder="Your Discord username" required></label><button class="btn btn-line btn-sm" type="submit">Save Discord</button></form>
       <a class="btn btn-gold btn-sm" href="captain.html" style="margin-top:16px"><i data-lucide="users-round"></i>Create or manage a team</a>
     </div></div>
     <section class="dcard event-card personal-match-schedule"><div class="dh"><i data-lucide="calendar-clock"></i>My match schedule</div><div class="db" id="playerMatches" aria-live="polite"><p class="team-empty">Loading your matches…</p></div></section>
     <section class="player-team-list" id="playerTeams" aria-live="polite"><div class="team-empty">Loading your teams…</div></section>`;
   const list=$('#playerTeams');
   const matchHost=$('#playerMatches');
+  wrap.querySelector('#playerDiscordForm').addEventListener('submit',async event=>{
+    event.preventDefault();
+    const form=event.currentTarget,button=form.querySelector('button[type="submit"]'),discordUsername=String(new FormData(form).get('discord_username')||'').trim();
+    if(discordUsername.length<2||discordUsername.length>64){toast('err','Discord username required','Enter 2–64 characters.');return;}
+    button.disabled=true;
+    try{
+      const {error}=await SUPA.client.from('profiles').update({discord_username:discordUsername}).eq('id',Auth.user.id);
+      if(error)throw error;
+      Auth.user.discordUsername=discordUsername;
+      toast('ok','Discord username saved','Your team rosters now show this contact name.');
+      await render();
+    }catch(error){toast('err','Could not save Discord username',error.message||'Please try again.');}
+    finally{button.disabled=false;}
+  });
   const renderMatches=async()=>{
     const {data,error}=await SUPA.client.rpc('get_my_team_matches');if(error)throw error;
     const rows=data||[],now=Date.now();
@@ -48,8 +63,12 @@ Auth.ready.then(async()=>{
       const {data,error}=await SUPA.client.rpc('list_team_roster',{p_team_id:team.id});
       return {team,membership:byTeam.get(team.id),roster:data||[],error};
     }));
+    const memberIds=[...new Set(rosters.flatMap(({roster})=>roster.map(row=>row.user_id)))];
+    const {data:profiles,error:profileError}=memberIds.length?await SUPA.client.from('public_profiles').select('id,discord_username').in('id',memberIds):{data:[],error:null};
+    if(profileError)throw profileError;
+    const discordById=new Map((profiles||[]).map(profile=>[profile.id,profile.discord_username]));
     list.innerHTML=rosters.map(({team,membership,roster,error})=>{
-      const members=error?'<p class="team-empty">Roster details are unavailable.</p>':`<ul class="team-roster">${roster.map(row=>`<li><span><b>${esc(row.username||row.player_name||'Player')}${row.user_id===Auth.user.id?' · You':''}</b><small>${esc(row.member_role||'player')}</small></span>${row.member_role==='captain'?'<i data-lucide="crown" aria-label="Team captain"></i>':''}</li>`).join('')}</ul>`;
+      const members=error?'<p class="team-empty">Roster details are unavailable.</p>':`<ul class="team-roster">${roster.map(row=>`<li><span><b>${esc(row.username||row.player_name||'Player')}${row.user_id===Auth.user.id?' · You':''}</b><small>${esc(row.member_role||'player')}${discordById.get(row.user_id)?` · Discord @${esc(discordById.get(row.user_id))}`:''}</small></span>${row.member_role==='captain'?'<i data-lucide="crown" aria-label="Team captain"></i>':''}</li>`).join('')}</ul>`;
       const role=membership?.role||'player';
       return `<article class="dcard team-card"><div class="dh"><i data-lucide="users-round"></i>${esc(team.name)}<span class="mono-r">${esc(team.tag)}</span></div><div class="db">
         <div class="team-meta"><span>${esc(team.game.toUpperCase())}</span><span>${esc(team.region||'Region not set')}</span><span>Your role: ${esc(role)}</span></div>

@@ -76,6 +76,10 @@ Auth.ready.then(async()=>{
       ]);
       return {team,roster:rosterResult.data||[],rosterError:rosterResult.error,invites:invitesResult.data||[],invitesError:invitesResult.error,games:gamesResult.data||[],gamesError:gamesResult.error,gameRoster:gameRosterResult.data||[],gameRosterError:gameRosterResult.error,inbox:inboxResult.data||[],inboxError:inboxResult.error};
     }));
+    const memberIds=[...new Set(results.flatMap(({roster})=>roster.map(row=>row.user_id)))];
+    const {data:profiles,error:profileError}=memberIds.length?await SUPA.client.from('public_profiles').select('id,discord_username').in('id',memberIds):{data:[],error:null};
+    if(profileError)throw profileError;
+    const discordById=new Map((profiles||[]).map(profile=>[profile.id,profile.discord_username]));
     cards.innerHTML=results.map(({team,roster,rosterError,invites,invitesError,games,gamesError,gameRoster,gameRosterError,inbox,inboxError})=>{
       const active=roster.filter(row=>row.status==='active');
       const pending=invites.filter(inv=>!inv.revoked_at&&!inv.accepted_at&&new Date(inv.expires_at)>new Date());
@@ -84,7 +88,7 @@ Auth.ready.then(async()=>{
         const self=row.user_id===Auth.user.id;
         const memberRole=row.member_role||'player';
         const controls=memberRole==='captain'?'<i data-lucide="crown" aria-label="Team captain"></i>':`<div class="team-member-actions"><select aria-label="Roster role" data-member-role="${esc(row.user_id)}"><option value="player"${memberRole==='player'?' selected':''}>Player</option><option value="substitute"${memberRole==='substitute'?' selected':''}>Substitute</option></select><button class="btn btn-line btn-sm" type="button" data-change-member="${esc(row.user_id)}" data-team="${esc(team.id)}">Save</button><button class="btn btn-line btn-sm" type="button" data-remove-member="${esc(row.user_id)}" data-team="${esc(team.id)}">Remove</button></div>`;
-        return `<li><span><b>${esc(label)}${self?' · You':''}</b><small>${esc(memberRole)}${row.joined_at?' · Joined '+esc(fmtDate(row.joined_at)):''}</small></span>${controls}</li>`;
+        return `<li><span><b>${esc(label)}${self?' · You':''}</b><small>${esc(memberRole)}${discordById.get(row.user_id)?` · Discord @${esc(discordById.get(row.user_id))}`:''}${row.joined_at?' · Joined '+esc(fmtDate(row.joined_at)):''}</small></span>${controls}</li>`;
       }).join('')}</ul>`:'<p class="team-empty">No active roster members yet.</p>';
       const teamEvents=(registrations||[]).filter(row=>row.team_id===team.id);
       const eventHtml=teamEvents.length?teamEvents.map(reg=>{

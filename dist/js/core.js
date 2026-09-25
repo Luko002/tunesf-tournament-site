@@ -77,7 +77,7 @@ const Auth={
   async _loadUser(session){
     const id=session.user.id;
     const [profile,assigned,permissionRows]=await Promise.all([
-      SUPA.client.from('profiles').select('player_name,username,game,region').eq('id',id).maybeSingle(),
+      SUPA.client.from('profiles').select('player_name,username,game,region,discord_username').eq('id',id).maybeSingle(),
       SUPA.client.rpc('get_my_roles'),SUPA.client.rpc('get_my_permissions')
     ]);
     if(profile.error)throw profile.error;if(assigned.error)throw assigned.error;if(permissionRows.error)throw permissionRows.error;
@@ -85,10 +85,10 @@ const Auth={
     if(!roleKeys.length)throw new Error('This account has no active TUNESF role.');
     roleKeys.sort((a,b)=>(ROLES[b]?.level||0)-(ROLES[a]?.level||0));
     this.permissions=new Set(permissionRows.data||[]);
-    this.user={id,email:session.user.email,name:profile.data?.username||profile.data?.player_name||session.user.email,game:profile.data?.game||null,roles:roleKeys};
+    this.user={id,email:session.user.email,name:profile.data?.username||profile.data?.player_name||session.user.email,game:profile.data?.game||null,discordUsername:profile.data?.discord_username||null,roles:roleKeys};
   },
   async signInPassword(email,password){const {data,error}=await SUPA.client.auth.signInWithPassword({email,password});if(error)throw error;await this._loadUser(data.session);return this.user;},
-  async signUp(username,email,password){return SUPA.client.auth.signUp({email,password,options:{data:{player_name:username,game:'Not selected'},emailRedirectTo:location.origin}});}
+  async signUp(username,email,password,discordUsername){return SUPA.client.auth.signUp({email,password,options:{data:{username,player_name:username,discord_username:discordUsername,game:'Not selected'},emailRedirectTo:location.origin}});}
 };
 Auth.ready=Auth.init();
 
