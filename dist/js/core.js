@@ -95,18 +95,26 @@ Auth.ready=Auth.init();
 async function loadPublicData(){
   const {data,error}=await SUPA.client.from('tournament_directory').select('*').order('starts_at',{ascending:true,nullsFirst:false});
   if(error)throw error;
-  TOURN.splice(0,TOURN.length,...(data||[]).map(t=>({
+  const rows=data||[],paths=[...new Set(rows.map(t=>t.cover_image_path).filter(Boolean))];
+  let coverUrls=new Map();
+  if(paths.length){
+    const {data:signed,error:coverError}=await SUPA.client.storage.from('tournament-covers').createSignedUrls(paths,3600);
+    if(coverError)console.warn('Tournament covers could not be loaded:',coverError.message);
+    else coverUrls=new Map((signed||[]).filter(row=>row.signedUrl).map(row=>[row.path,row.signedUrl]));
+  }
+  TOURN.splice(0,TOURN.length,...rows.map(t=>({
     id:t.id,name:t.name,game:t.game,prize:Number(t.prize_pool)||0,currency:t.currency||'TND',teams:Number(t.registered_teams)||0,max:Number(t.max_teams)||0,
+    startsAt:t.starts_at||null,statusKey:t.status,
     status:({registration_open:'reg',registration_closed:'closed',in_progress:'live',completed:'closed',cancelled:'closed',draft:'soon'})[t.status]||'soon',
     when:t.starts_at?new Intl.DateTimeFormat(undefined,{dateStyle:'medium',timeStyle:'short'}).format(new Date(t.starts_at)):'Date to be announced',
     loc:t.region||'Location to be announced',fmt:`${String(t.format||'').replaceAll('_',' ').toUpperCase()} · ${/^BO\d+$/i.test(String(t.best_of||''))?String(t.best_of).toUpperCase():`BO${Number(t.best_of)||1}`}`,
-    org:'Tournament organizer',desc:t.description||'The organizer has not added a description yet.'
+    org:'Tournament organizer',desc:t.description||'The organizer has not added a description yet.',cover:coverUrls.get(t.cover_image_path)||''
   })));
 }
 function boot(fn){Auth.ready.then(async()=>{if(['index.html','tournaments.html'].includes(currentPage()))await loadPublicData();return fn()}).catch(e=>{console.error('Startup failed:',e);toast('err','Could not load the site',String(e?.message||e));});}
 function requirePerm(perm){if(Auth.has(perm))return true;const role=ROLE_FOR_PERM[perm]||'PLAYER';const next=currentPage();location.replace('login.html?next='+encodeURIComponent(next)+'&need='+encodeURIComponent(role));return false;}
 
-const TMODAL_HTML=`<div class="overlay" id="tmodal"><div class="modal cut"><div class="cut-in"><button class="iconbtn m-close" id="mClose" aria-label="Close"><i data-lucide="x"></i></button><img class="m-img" id="mImg" alt=""><div class="m-content"><div class="m-chips" id="mChips"></div><h2 id="mName"></h2><p id="mDesc"></p><div class="m-info"><div><small>Prize pool</small><b id="mPrize"></b></div><div><small>Teams</small><b id="mTeams"></b></div><div><small>Starts</small><b id="mDates"></b></div><div><small>Format</small><b id="mFmt"></b></div><div><small>Region</small><b id="mLoc"></b></div><div><small>Organizer</small><b id="mOrg"></b></div></div><label id="mTeamWrap" hidden style="display:block;margin:14px 0"><span>Choose your team</span><select id="mTeam"></select></label><div class="m-acts"><button class="btn btn-gold" id="mReg" type="button">Register a team</button><a class="btn btn-line" href="bracket.html" id="mBracket">View bracket</a></div></div></div></div></div>`;
+const TMODAL_HTML=`<div class="overlay" id="tmodal"><div class="modal cut"><div class="cut-in"><button class="iconbtn m-close" id="mClose" aria-label="Close"><i data-lucide="x"></i></button><img class="m-img" id="mImg" alt=""><div class="m-content"><div class="m-chips" id="mChips"></div><h2 id="mName"></h2><p id="mDesc"></p><div class="m-info"><div><small>Prize pool</small><b id="mPrize"></b></div><div><small>Teams</small><b id="mTeams"></b></div><div><small>Starts</small><b id="mDates"></b></div><div><small>Format</small><b id="mFmt"></b></div><div><small>Region</small><b id="mLoc"></b></div><div><small>Organizer</small><b id="mOrg"></b></div></div><label id="mTeamWrap" hidden style="display:block;margin:14px 0"><span>Choose your team</span><select id="mTeam"></select></label><div class="m-acts"><button class="btn btn-gold" id="mReg" type="button">Register a team</button><a class="btn btn-line" href="tournaments.html" id="mBracket">Open tournament page</a></div></div></div></div></div>`;
 (function injectShell(){
   document.body.insertAdjacentHTML('beforeend',`<div id="toasts"></div>${TMODAL_HTML}`);
   const ticker=document.createElement('div');ticker.className='ticker';ticker.setAttribute('role','region');ticker.setAttribute('aria-label','TUNESF federation updates');
@@ -115,6 +123,7 @@ const TMODAL_HTML=`<div class="overlay" id="tmodal"><div class="modal cut"><div 
   ticker.innerHTML=`<span class="ticker-label">${updates.join(' · ')}</span><div class="tk" aria-hidden="true">${tickerItems}${tickerItems}</div>`;
   $('#topbar')?.insertAdjacentElement('afterend',ticker);
   if(READ_ONLY_PREVIEW){const notice=document.createElement('div');notice.className='preview-notice';notice.setAttribute('role','status');notice.textContent='LOCAL PREVIEW · CONNECTED TO PRODUCTION · CHANGES ARE DISABLED';document.body.classList.add('preview-readonly');ticker.insertAdjacentElement('afterend',notice);}
+  else if(SUPABASE_CONFIG.environment==='local'){const notice=document.createElement('div');notice.className='preview-notice';notice.setAttribute('role','status');notice.textContent='LOCAL TEST DATABASE · CHANGES ARE ISOLATED FROM PRODUCTION';ticker.insertAdjacentElement('afterend',notice);}
 })();
 
 function currentPage(){return(location.pathname.split('/').pop()||'index.html').toLowerCase();}
@@ -123,7 +132,7 @@ function buildNav(){
   $$('.js-logo-s').forEach(el=>{el.innerHTML=logoSvg(30);});
   const nl=$('#navLinks'),page=currentPage();
   if(nl){
-    const links=[['index.html','Home'],['tournaments.html','Tournaments'],['clubs.html','Clubs'],['standings.html','Standings'],['bracket.html','Bracket'],['roles.html','Roles']];
+    const links=[['index.html','Home'],['tournaments.html','Tournaments'],['clubs.html','Clubs'],['standings.html','Standings'],['roles.html','Roles']];
     let html=links.map(([href,label])=>`<a href="${href}"${page===href?' class="act"':''}>${label}</a>`).join('');
     const consoles=Auth.consoles();
     if(consoles.length===1)html+=`<a href="${consoles[0].href}">${consoles[0].label}</a>`;
@@ -146,9 +155,9 @@ addEventListener('scroll',()=>$('#topbar')?.classList.toggle('scrolled',scrollY>
 function tCardHTML(t){
   const badge={live:'In progress',reg:'Registration open',soon:'Upcoming',closed:'Registration closed'}[t.status]||'Status unavailable';
   const filled=t.max?Math.min(100,Math.round(t.teams/t.max*100)):0;
-  return `<article class="t-card" data-t="${esc(t.id)}"><div class="t-media"><div class="t-scrim"></div><div class="t-tags"><span class="chip">${esc(t.org)}</span><span class="badge ${t.status==='live'?'live':t.status==='reg'?'reg':''}">${badge}</span></div><span class="t-game">${esc(GAMES[t.game]?.label||t.game||'Game to be announced')}</span></div><div class="t-body"><div class="t-top"><span>${esc(t.loc)}</span><span>${esc(t.when)}</span></div><h3>${esc(t.name)}</h3><p class="t-desc">${esc(t.desc)}</p><div class="t-meta"><span><i data-lucide="users"></i>${t.teams} teams</span><span>${esc(t.fmt)}</span></div><div class="t-slots"><span>${t.max?`${t.teams}/${t.max} team slots`: 'Capacity to be announced'}</span><div class="slotbar"><i style="width:${filled}%"></i></div></div><div class="t-foot"><div class="t-prize"><small>Prize pool</small><b>${fmt(t.prize)} <small>${esc(t.currency)}</small></b></div><a class="btn btn-line btn-sm" data-tournament-detail href="tournament.html?id=${encodeURIComponent(t.id)}">Details</a></div></div></article>`;
+  return `<article class="t-card" data-t="${esc(t.id)}"><div class="t-media">${t.cover?`<img class="t-cover" src="${esc(t.cover)}" alt="" loading="lazy" decoding="async">`:''}<div class="t-scrim"></div><div class="t-tags"><span class="chip">${esc(t.org)}</span><span class="badge ${t.status==='live'?'live':t.status==='reg'?'reg':''}">${badge}</span></div><span class="t-game">${esc(GAMES[t.game]?.label||t.game||'Game to be announced')}</span></div><div class="t-body"><div class="t-top"><span>${esc(t.loc)}</span><span>${esc(t.when)}</span></div><h3>${esc(t.name)}</h3><p class="t-desc">${esc(t.desc)}</p><div class="t-meta"><span><i data-lucide="users"></i>${t.teams} teams</span><span>${esc(t.fmt)}</span></div><div class="t-slots"><span>${t.max?`${t.teams}/${t.max} team slots`: 'Capacity to be announced'}</span><div class="slotbar"><i style="width:${filled}%"></i></div></div><div class="t-foot"><div class="t-prize"><small>Prize pool</small><b>${fmt(t.prize)} <small>${esc(t.currency)}</small></b></div><a class="btn btn-line btn-sm" data-tournament-detail href="tournament.html?id=${encodeURIComponent(t.id)}">Details</a></div></div></article>`;
 }
-function openT(t){if(!t)return;$('#mChips').innerHTML=`<span class="chip">${esc(GAMES[t.game]?.label||t.game||'Game not set')}</span><span class="chip">${esc(t.fmt)}</span>`;$('#mName').textContent=t.name;$('#mDesc').textContent=t.desc;$('#mPrize').textContent=`${fmt(t.prize)} ${t.currency}`;$('#mTeams').textContent=t.max?`${t.teams} / ${t.max}`:String(t.teams);$('#mDates').textContent=t.when;$('#mFmt').textContent=t.fmt;$('#mLoc').textContent=t.loc;$('#mOrg').textContent=t.org;$('#mBracket').href=`bracket.html?tournament=${encodeURIComponent(t.id)}`;$('#mTeamWrap').hidden=true;$('#mReg').hidden=t.status!=='reg';$('#mReg').disabled=false;let teamsLoaded=false;$('#tmodal').classList.add('open');document.body.classList.add('locked');
+function openT(t){if(!t)return;$('#mImg').hidden=!t.cover;if(t.cover)$('#mImg').src=t.cover;$('#mChips').innerHTML=`<span class="chip">${esc(GAMES[t.game]?.label||t.game||'Game not set')}</span><span class="chip">${esc(t.fmt)}</span>`;$('#mName').textContent=t.name;$('#mDesc').textContent=t.desc;$('#mPrize').textContent=`${fmt(t.prize)} ${t.currency}`;$('#mTeams').textContent=t.max?`${t.teams} / ${t.max}`:String(t.teams);$('#mDates').textContent=t.when;$('#mFmt').textContent=t.fmt;$('#mLoc').textContent=t.loc;$('#mOrg').textContent=t.org;$('#mBracket').href=`tournament.html?id=${encodeURIComponent(t.id)}#eventBrackets`;$('#mBracket').textContent='Open tournament page';$('#mTeamWrap').hidden=true;$('#mReg').hidden=t.status!=='reg';$('#mReg').disabled=false;let teamsLoaded=false;$('#tmodal').classList.add('open');document.body.classList.add('locked');
   $('#mReg').onclick=async()=>{
     const button=$('#mReg');if(!Auth.is()){location.href='login.html?next='+encodeURIComponent('tournaments.html')+'&need=PLAYER';return;}
     button.disabled=true;

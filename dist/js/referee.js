@@ -8,17 +8,29 @@ Auth.ready.then(async()=>{
   const queue=$('#refereeQueue');
   async function render(){
     queue.innerHTML='Loading assigned matches...';
-    const {data:assignments,error}=await SUPA.client.from('match_officials').select('match_id').eq('user_id',Auth.user.id);
-    if(error)throw error;
-    const ids=[...new Set((assignments||[]).map(a=>a.match_id))];
-    if(!ids.length){queue.innerHTML='<div class="dcard" style="grid-column:1/-1"><div class="dh"><i data-lucide="gavel"></i>Referee assignments</div><div class="db"><p class="team-empty">You have no assigned matches.</p></div></div>';icons();return;}
-    const [matchResult,submissionResult,evidenceResult]=await Promise.all([
-      SUPA.client.from('tournament_matches').select('id,tournament_id,home_registration_id,away_registration_id,status,home_score,away_score,scheduled_at,round_number').in('id',ids).order('scheduled_at',{ascending:true,nullsFirst:false}),
-      SUPA.client.from('match_result_submissions').select('id,match_id,registration_id,home_score,away_score,status,created_at').in('match_id',ids).order('created_at',{ascending:false}),
-      SUPA.client.from('match_evidence').select('id,match_id,object_key,mime_type,byte_size,created_at').in('match_id',ids).order('created_at',{ascending:false})
+    const [assignmentResult,staffResult]=await Promise.all([
+      SUPA.client.from('match_officials').select('match_id').eq('user_id',Auth.user.id),
+      SUPA.client.from('tournament_staff').select('tournament_id').eq('user_id',Auth.user.id).contains('capabilities',['referee'])
     ]);
-    if(matchResult.error)throw matchResult.error;if(submissionResult.error)throw submissionResult.error;if(evidenceResult.error)throw evidenceResult.error;
-    const matches=matchResult.data||[];
+    if(assignmentResult.error)throw assignmentResult.error;if(staffResult.error)throw staffResult.error;
+    const ids=[...new Set((assignmentResult.data||[]).map(a=>a.match_id))];
+    const tournamentIds=[...new Set((staffResult.data||[]).map(s=>s.tournament_id))];
+    if(!ids.length&&!tournamentIds.length){queue.innerHTML='<div class="dcard" style="grid-column:1/-1"><div class="dh"><i data-lucide="gavel"></i>Referee assignments</div><div class="db"><p class="team-empty">You have no assigned matches or tournaments.</p></div></div>';icons();return;}
+    const columns='id,tournament_id,home_registration_id,away_registration_id,status,home_score,away_score,scheduled_at,round_number';
+    const [matchResult,eventMatchResult]=await Promise.all([
+      ids.length?SUPA.client.from('tournament_matches').select(columns).in('id',ids):{data:[],error:null},
+      tournamentIds.length?SUPA.client.from('tournament_matches').select(columns).in('tournament_id',tournamentIds):{data:[],error:null}
+    ]);
+    if(matchResult.error)throw matchResult.error;if(eventMatchResult.error)throw eventMatchResult.error;
+    const matches=[...new Map([...(matchResult.data||[]),...(eventMatchResult.data||[])].map(m=>[m.id,m])).values()]
+      .sort((a,b)=>(a.scheduled_at||'').localeCompare(b.scheduled_at||''));
+    const allIds=matches.map(m=>m.id);
+    if(!allIds.length){queue.innerHTML='<div class="dcard" style="grid-column:1/-1"><div class="dh"><i data-lucide="gavel"></i>Referee assignments</div><div class="db"><p class="team-empty">Your tournament assignments have no published matches yet.</p></div></div>';icons();return;}
+    const [submissionResult,evidenceResult]=await Promise.all([
+      SUPA.client.from('match_result_submissions').select('id,match_id,registration_id,home_score,away_score,status,created_at').in('match_id',allIds).order('created_at',{ascending:false}),
+      SUPA.client.from('match_evidence').select('id,match_id,object_key,mime_type,byte_size,created_at').in('match_id',allIds).order('created_at',{ascending:false})
+    ]);
+    if(submissionResult.error)throw submissionResult.error;if(evidenceResult.error)throw evidenceResult.error;
     const evidenceRows=await Promise.all((evidenceResult.data||[]).map(async row=>{
       const {data,error}=await SUPA.client.storage.from('match-evidence').createSignedUrl(row.object_key,120);
       if(error)throw error;return {...row,url:data.signedUrl};

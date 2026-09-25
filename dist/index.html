@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=Barlow:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css?v=20260924g">
-<link rel="stylesheet" href="css/pages.css">
+<link rel="stylesheet" href="css/pages.css?v=20260924c">
 </head>
 <body>
 
@@ -30,6 +30,12 @@
       <div class="eyebrow">Official Tunisian esports competition platform</div>
       <h1>Where <span class="out">Tunisia</span> Competes<span class="dotp">.</span></h1>
       <p class="hero-sub">Discover verified competitions, build your team, and manage tournaments through one secure federation platform.</p>
+      <section class="home-countdown" id="homeCountdown" aria-label="Upcoming tournament countdown">
+        <div class="home-countdown-copy"><span class="eyebrow">Next tournament starts in</span><a id="homeCountdownTitle" href="tournaments.html">Finding the next tournament…</a></div>
+        <div class="home-countdown-time" role="timer" aria-live="off">
+          <span><b data-home-time="days">--</b><small>days</small></span><i>:</i><span><b data-home-time="hours">--</b><small>hours</small></span><i>:</i><span><b data-home-time="minutes">--</b><small>min</small></span><i>:</i><span><b data-home-time="seconds">--</b><small>sec</small></span>
+        </div>
+      </section>
       <div class="hero-cta">
         <a class="btn btn-gold" id="ctaRegister" href="tournaments.html"><i data-lucide="trophy"></i>Browse tournaments</a>
       </div>
@@ -75,7 +81,7 @@
 <!-- ================= FEATURED TOURNAMENTS ================= -->
 <section class="sec tight" style="padding-top:0"><div class="wrap">
   <div class="sec-head rv">
-    <div><div class="eyebrow">Featured Competitions</div><h2>Open <span class="out">Brackets</span></h2></div>
+    <div><div class="eyebrow">Featured Competitions</div><h2>Upcoming <span class="out">Tournaments</span></h2></div>
     <a class="btn btn-line btn-sm rv" href="tournaments.html">Browse all tournaments<i data-lucide="arrow-right"></i></a>
   </div>
   <div class="tgrid rv" id="featGrid"></div>
@@ -99,8 +105,8 @@
 
 <script src="https://unpkg.com/lucide@1.47.0/dist/umd/lucide.min.js" integrity="sha384-v15JX+vZHMR3T6LQR9N6e6wIKrKOdNTbdj8j+e5irqq3L9gCauJz2vGlUzomWyUp" crossorigin="anonymous"></script>
 <script>if(!window.lucide){document.write('<script src="https://cdn.jsdelivr.net/npm/lucide@1.47.0/dist/umd/lucide.min.js" integrity="sha384-v15JX+vZHMR3T6LQR9N6e6wIKrKOdNTbdj8j+e5irqq3L9gCauJz2vGlUzomWyUp" crossorigin="anonymous"><\/script>')}</script>
-<script src="js/supabase-config.js?v=3"></script>
-<script src="js/core.js?v=20260924e"></script>
-<script src="js/home.js?v=20260924b"></script>
+<script src="js/supabase-config.js?v=4"></script>
+<script src="js/core.js?v=20260924g"></script>
+<script src="js/home.js?v=20260925a"></script>
 </body>
 </html>

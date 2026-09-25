@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=Barlow:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css?v=20260924g">
-<link rel="stylesheet" href="css/pages.css">
+<link rel="stylesheet" href="css/pages.css?v=20260924c">
 </head>
 <body>
 
@@ -38,6 +38,7 @@
         <h3>Identity &amp; game</h3>
         <div class="wrow"><div><label class="fl">Tournament name</label><input id="wName" placeholder="Tournament name" maxlength="120" required></div>
         <div><label class="fl">Region</label><select id="wRegion"><option>ONLINE · TUNISIA</option><option>MENA WEST</option><option>LAN · TUNIS</option><option>LAN · SOUSSE</option></select></div></div>
+        <div class="cover-picker"><div><label class="fl" for="wCover">Tournament cover image <small>(optional)</small></label><input id="wCover" type="file" accept="image/jpeg,image/png,image/webp"><small class="team-empty">JPG, PNG, or WebP · up to 5 MB. A wide image works best.</small></div><div class="cover-preview" id="wCoverPreview"><span><i data-lucide="image-plus"></i>Cover preview</span></div></div>
         <div id="wOrganizationWrap" hidden><label class="fl" for="wOrganization">Hosting organization</label><select id="wOrganization"><option value="">Personal tournament</option></select><small class="team-empty">Choose an organization you manage, or leave this as a personal event.</small></div>
         <label class="fl">Select game</label>
         <div class="gtiles" id="wGames"></div>

@@ -60,7 +60,8 @@ function wGo(i){wI=i;
 function wSum(){const maps=$$('#wMaps button.act').length;
   const st={single:'Single elimination',double:'Double elimination',rr:'Round robin → playoffs'}[WSEL.struct];
   const d=$('#wDate').value?new Date($('#wDate').value).toDateString().slice(4).toUpperCase():'TBA';
-  const rows=[['GAME',WSEL.game?GAMES[WSEL.game].label:'— SELECT A GAME —'],['STRUCTURE',st],['SERIES FORMAT',WSEL.series],
+  const cover=$('#wCover').files[0];
+  const rows=[['GAME',WSEL.game?GAMES[WSEL.game].label:'— SELECT A GAME —'],['COVER IMAGE',cover?cover.name:'NOT ADDED'],['STRUCTURE',st],['SERIES FORMAT',WSEL.series],
     ['MAP POOL',maps+' MAPS'],['ANTI-CHEAT',$('#wAc').classList.contains('act')?'REQUIRED':'OPTIONAL'],
     ['START',d],['SLOTS',$('#wMax').value+' TEAMS · '+$('#wRoster').value],['SUBSTITUTES',$('#wSubs').value+' PER TEAM'],
     ['PRIZE POOL',fmt(+$('#wPrize').value||0)+' TND'],['PRIZE SHARE',$('#wFirstShare').value+'% / '+$('#wSecondShare').value+'%'],
@@ -68,6 +69,21 @@ function wSum(){const maps=$$('#wMaps button.act').length;
   $('#wSum').innerHTML=rows.map(r=>`<div class="srow"><span>${r[0]}</span><b>${r[1]}</b></div>`).join('');}
 $('#wNext').onclick=()=>wI===4?wPublish():wGo(wI+1);
 $('#wBack').onclick=()=>wGo(wI-1);
+
+$('#wCover').addEventListener('change',()=>{
+  const file=$('#wCover').files[0],preview=$('#wCoverPreview');
+  if(preview.dataset.url)URL.revokeObjectURL(preview.dataset.url);
+  delete preview.dataset.url;
+  if(!file){preview.innerHTML='<span><i data-lucide="image-plus"></i>Cover preview</span>';icons();return;}
+  if(!['image/jpeg','image/png','image/webp'].includes(file.type)||file.size>5*1024*1024){
+    $('#wCover').value='';preview.innerHTML='<span><i data-lucide="image-plus"></i>Cover preview</span>';icons();
+    toast('err','Unsupported cover image','Choose a JPG, PNG, or WebP image no larger than 5 MB.');return;
+  }
+  const url=URL.createObjectURL(file);preview.dataset.url=url;
+  preview.innerHTML=`<img src="${url}" alt="Tournament cover preview"><button class="cover-remove" type="button" aria-label="Remove cover image"><i data-lucide="x"></i></button>`;
+  preview.querySelector('.cover-remove').onclick=()=>{$('#wCover').value='';URL.revokeObjectURL(url);delete preview.dataset.url;preview.innerHTML='<span><i data-lucide="image-plus"></i>Cover preview</span>';icons();};
+  icons();
+});
 
 async function wPublish(){
   if(!WSEL.game){toast('err','Game required','Pick the game in step 1 before publishing.');wGo(0);return;}
@@ -80,6 +96,10 @@ async function wPublish(){
   }
   const format={single:'single_elimination',double:'double_elimination',rr:'round_robin_playoffs'}[WSEL.struct];
   const prizePool=Math.round((+$('#wPrize').value||0)*100)/100;
+  const coverFile=$('#wCover').files[0];
+  if(coverFile&&(!['image/jpeg','image/png','image/webp'].includes(coverFile.type)||coverFile.size>5*1024*1024)){
+    toast('err','Unsupported cover image','Choose a JPG, PNG, or WebP image no larger than 5 MB.');wGo(0);$('#wCover').focus();return;
+  }
   const firstShare=Number($('#wFirstShare').value);
   if(!Number.isFinite(prizePool)||prizePool<0||!Number.isInteger(firstShare)||firstShare<0||firstShare>100){
     toast('err','Check the prize schedule','The prize total must be zero or more and the first place share must be between 0 and 100.');wGo(3);return;
@@ -100,6 +120,20 @@ async function wPublish(){
   }catch(error){toast('err','Could not publish tournament',error.message||'Check your connection and try again.');return;}
   if(result.error){toast('err','Could not save tournament',result.error.message);return;}
   const tournamentId=result.data;
+  if(coverFile){
+    const extension=({ 'image/jpeg':'jpg','image/png':'png','image/webp':'webp' })[coverFile.type];
+    const objectPath=`${tournamentId}/${crypto.randomUUID().replaceAll('-','')}.${extension}`;
+    let upload;
+    try{
+      upload=await SUPA.client.storage.from('tournament-covers').upload(objectPath,coverFile,{contentType:coverFile.type,cacheControl:'3600',upsert:false});
+      if(upload.error)throw upload.error;
+      const {error}=await SUPA.client.rpc('set_tournament_cover',{p_tournament_id:tournamentId,p_cover_path:objectPath});
+      if(error)throw error;
+    }catch(error){
+      if(upload?.data)await SUPA.client.storage.from('tournament-covers').remove([objectPath]);
+      toast('err','Tournament saved as draft',`Its cover image could not be saved. Draft ID: ${tournamentId}. ${error.message||'Please try again after checking storage access.'}`);return;
+    }
+  }
   if(prizePool>0){
     const firstAmount=Math.round(prizePool*firstShare)/100;
     const prizes=[{place:1,label:'Champion',amount:firstAmount},{place:2,label:'Runner-up',amount:Math.round((prizePool-firstAmount)*100)/100}].filter(p=>p.amount>0);

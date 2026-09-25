@@ -10,8 +10,29 @@ Auth.ready.then(async()=>{
       <p style="color:var(--dim)">View the teams you belong to and the rosters you play with. Accept an invitation from its secure link.</p>
       <a class="btn btn-gold btn-sm" href="captain.html" style="margin-top:16px"><i data-lucide="users-round"></i>Create or manage a team</a>
     </div></div>
+    <section class="dcard event-card personal-match-schedule"><div class="dh"><i data-lucide="calendar-clock"></i>My match schedule</div><div class="db" id="playerMatches" aria-live="polite"><p class="team-empty">Loading your matches…</p></div></section>
     <section class="player-team-list" id="playerTeams" aria-live="polite"><div class="team-empty">Loading your teams…</div></section>`;
   const list=$('#playerTeams');
+  const matchHost=$('#playerMatches');
+  const renderMatches=async()=>{
+    const {data,error}=await SUPA.client.rpc('get_my_team_matches');if(error)throw error;
+    const rows=data||[],now=Date.now();
+    rows.sort((a,b)=>{
+      const priority=m=>m.match_status==='live'?0:m.match_status==='paused'?1:m.match_status==='ready'&&m.scheduled_at&&new Date(m.scheduled_at)>now?2:3;
+      return priority(a)-priority(b)||(a.scheduled_at?new Date(a.scheduled_at).getTime():Infinity)-(b.scheduled_at?new Date(b.scheduled_at).getTime():Infinity);
+    });
+    if(!rows.length){matchHost.innerHTML='<p class="team-empty">Your scheduled matches will appear here when your team is entered in a published bracket.</p>';return;}
+    const label={live:'LIVE',paused:'PAUSED',ready:'UPCOMING',result_pending:'RESULT REVIEW',disputed:'DISPUTE REVIEW'};
+    matchHost.innerHTML=`<div class="personal-match-grid">${rows.map(match=>{
+      const live=match.match_status==='live',scheduled=match.match_status==='ready'&&match.scheduled_at;
+      const center=live?`${match.your_score??0} : ${match.opponent_score??0}`:scheduled?`<span data-player-match-timer="${esc(match.scheduled_at)}"></span>`:'Schedule pending';
+      return `<article class="personal-match-card"><div class="personal-match-top"><b>${esc(match.tournament_name)}</b><span class="badge ${live?'live':''}">${label[match.match_status]||esc(match.match_status)}</span></div><div class="personal-match-vs"><span><b>${esc(match.your_team_name||'Your team')}</b><small>${esc(match.your_team_tag||'')}</small></span><strong>${center}</strong><span><b>${esc(match.opponent_team_name||'Opponent TBD')}</b><small>${esc(match.opponent_team_tag||'')}</small></span></div><div class="personal-match-foot"><span>${esc(match.stage_name)} · Round ${match.round_number}</span><span>${scheduled?esc(new Intl.DateTimeFormat(undefined,{dateStyle:'medium',timeStyle:'short'}).format(new Date(match.scheduled_at))):''}</span></div><a class="btn btn-gold btn-sm" href="match-room.html?id=${encodeURIComponent(match.match_id)}">Open match room</a></article>`;
+    }).join('')}</div>`;
+  };
+  const updateMatchTimers=()=>matchHost.querySelectorAll('[data-player-match-timer]').forEach(el=>{
+    const seconds=Math.max(0,Math.floor((new Date(el.dataset.playerMatchTimer)-Date.now())/1000));
+    el.textContent=seconds?`${Math.floor(seconds/3600)}:${String(Math.floor(seconds%3600/60)).padStart(2,'0')}:${String(seconds%60).padStart(2,'0')}`:'Starting now';
+  });
   const render=async()=>{
     list.innerHTML='<div class="team-empty">Loading your teams…</div>';
     const {data:memberships,error}=await SUPA.client.from('team_members').select('team_id,role,status')
@@ -51,5 +72,8 @@ Auth.ready.then(async()=>{
   });
   buildConsoleStrip();
   try{await render();}catch(error){list.innerHTML='<div class="team-empty">Your team list could not be loaded.</div>';toast('err','Player workspace unavailable',error.message||'Please reload and try again.');}
+  try{await renderMatches();}catch(error){matchHost.innerHTML='<p class="team-empty">Your matches could not be loaded. Please refresh this page.</p>';}
+  updateMatchTimers();setInterval(updateMatchTimers,1000);
+  setInterval(()=>renderMatches().catch(error=>console.warn('Match schedule refresh failed:',error)),30000);
   icons();
 }).catch(error=>toast('err','Player workspace unavailable',error.message||'Please reload and try again.'));
