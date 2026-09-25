@@ -11,14 +11,7 @@ let wI=0; const WSEL={game:null,struct:'single',series:'BO3'};
 async function loadOrganizations(){
   const wrap=$('#wOrganizationWrap'),select=$('#wOrganization');
   try{
-    const [owned,memberships]=await Promise.all([
-      SUPA.client.from('organizations').select('id,name').eq('owner_id',Auth.user.id).order('name'),
-      SUPA.client.from('organization_memberships').select('organization_id,capabilities').eq('user_id',Auth.user.id)
-    ]);
-    if(owned.error)throw owned.error;if(memberships.error)throw memberships.error;
-    const ids=[...new Set([...(owned.data||[]).map(o=>o.id),...(memberships.data||[]).filter(m=>(m.capabilities||[]).includes('create_tournaments')).map(m=>m.organization_id)])];
-    if(!ids.length)return;
-    const {data,error}=await SUPA.client.from('organizations').select('id,name').in('id',ids).order('name');
+    const {data,error}=await SUPA.client.rpc('list_organizations_for_current_user',{p_capability:'create_tournaments'});
     if(error)throw error;
     select.innerHTML='<option value="">Personal tournament</option>'+(data||[]).map(o=>`<option value="${esc(o.id)}">${esc(o.name)}</option>`).join('');
     wrap.hidden=false;

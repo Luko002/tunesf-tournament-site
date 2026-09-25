@@ -23,21 +23,12 @@ Auth.ready.then(async()=>{
   const capabilityLabels={manage_org:'Manage organization settings',manage_staff:'Manage staff',manage_teams:'Manage organization teams',create_tournaments:'Create organization tournaments',manage_prizes:'Manage prizes'};
   async function render(){
     list.innerHTML='<div class="team-empty">Loading your organizations...</div>';
-    const [owned,membershipResult]=await Promise.all([
-      isSuperAdmin?SUPA.client.from('organizations').select('id,club_id,owner_id,name,slug,description,region,created_at').order('name'):SUPA.client.from('organizations').select('id,club_id,owner_id,name,slug,description,region,created_at').eq('owner_id',Auth.user.id).order('name'),
-      SUPA.client.from('organization_memberships').select('organization_id,role,capabilities').eq('user_id',Auth.user.id)
-    ]);
-    if(owned.error)throw owned.error;if(membershipResult.error)throw membershipResult.error;
-    const myCaps=new Map((membershipResult.data||[]).map(m=>[m.organization_id,m.capabilities||[]]));
-    const ids=[...new Set([...(owned.data||[]).map(o=>o.id),...(membershipResult.data||[]).map(m=>m.organization_id)])];
-    if(!ids.length){list.innerHTML='<div class="dcard"><div class="dh">Your organizations</div><div class="db"><p class="team-empty">You do not belong to an organization yet. Create one above or ask an organization owner to add your account.</p></div></div>';return;}
-    const {data:organizations,error}=await SUPA.client.from('organizations').select('id,club_id,owner_id,name,slug,description,region,created_at').in('id',ids).order('name');
+    const {data:organizations,error}=await SUPA.client.rpc('list_organizations_for_current_user');
     if(error)throw error;
-    const ownerIds=[...new Set((organizations||[]).map(o=>o.owner_id).filter(Boolean))];
-    const ownerResult=ownerIds.length?await SUPA.client.from('public_profiles').select('id,username,player_name').in('id',ownerIds):{data:[],error:null};
-    if(ownerResult.error)throw ownerResult.error;
-    const owners=new Map((ownerResult.data||[]).map(p=>[p.id,p.username||p.player_name||'Unknown']));
-    const cards=await Promise.all((organizations||[]).map(async org=>{
+    const organizationRows=organizations||[];
+    const myCaps=new Map(organizationRows.map(org=>[org.id,org.my_capabilities||[]]));
+    if(!organizationRows.length){list.innerHTML='<div class="dcard"><div class="dh">Your organizations</div><div class="db"><p class="team-empty">You do not belong to an organization yet. Create one above or ask an organization owner to add your account.</p></div></div>';return;}
+    const cards=await Promise.all(organizationRows.map(async org=>{
       const canManageTeams=isSuperAdmin||org.owner_id===Auth.user.id||(myCaps.get(org.id)||[]).includes('manage_teams');
       const canStaff=isSuperAdmin||org.owner_id===Auth.user.id||(myCaps.get(org.id)||[]).includes('manage_staff');
       const [teams,members]=await Promise.all([
@@ -52,7 +43,7 @@ Auth.ready.then(async()=>{
       const memberRows=(members.data||[]).map(m=>`<li class="event-reg"><span><b>${esc(m.user_id)}</b><small>${esc(m.role)} · ${esc((m.capabilities||[]).map(c=>capabilityLabels[c]||c).join(', ')||'No capabilities')}</small></span></li>`).join('')||'<li class="team-empty">No staff assignments yet.</li>';
       const caps=Object.keys(capabilityLabels).map((cap,i)=>`<label><input type="checkbox" name="capabilities" value="${cap}"${i===1?' checked':''}> ${capabilityLabels[cap]}</label>`).join('');
       return `<article class="dcard team-card" data-organization-card data-org-name="${esc(org.name.toLowerCase())}"><div class="dh"><i data-lucide="landmark"></i>${esc(org.name)}<span class="mono-r">${esc(org.slug)}</span></div><div class="db">
-        <div class="team-meta"><span>${esc(org.region||'Region not set')}</span><span>${org.owner_id===Auth.user.id?'Owner':esc((membershipResult.data||[]).find(m=>m.organization_id===org.id)?.role||'Member')}</span><span>Owner: @${esc(owners.get(org.owner_id)||'Unknown')}</span></div>
+        <div class="team-meta"><span>${esc(org.region||'Region not set')}</span><span>${org.owner_id===Auth.user.id?'Owner':esc(org.my_role||'Member')}</span><span>Owner: @${esc(org.owner_username||org.owner_player_name||'Unknown')}</span></div>
         <p style="color:var(--dim)">${esc(org.description||'No description provided.')}</p>
         ${isSuperAdmin?`<form class="invite-create-form" data-org-owner="${esc(org.id)}"><label><span>Set owner by username</span><input name="username" required minlength="2" maxlength="32" pattern="[A-Za-z0-9_.-]+" placeholder="Account username"></label><button class="btn btn-line btn-sm" type="submit">Assign owner</button></form>`:''}
         <h3 class="team-section-title">Game teams and captains <span>${(teams.data||[]).length}</span></h3><p style="color:var(--dim)">Create one team for each game. Its captain manages only that game roster.</p><ul class="team-invites">${teamRows}</ul>
