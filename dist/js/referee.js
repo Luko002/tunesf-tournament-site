@@ -25,7 +25,14 @@ Auth.ready.then(async()=>{
     const matches=[...new Map([...(matchResult.data||[]),...(eventMatchResult.data||[])].map(m=>[m.id,m])).values()]
       .sort((a,b)=>(a.scheduled_at||'').localeCompare(b.scheduled_at||''));
     const allIds=matches.map(m=>m.id);
-    if(!allIds.length){queue.innerHTML='<div class="dcard" style="grid-column:1/-1"><div class="dh"><i data-lucide="gavel"></i>Referee assignments</div><div class="db"><p class="team-empty">Your tournament assignments have no published matches yet.</p></div></div>';icons();return;}
+    if(!allIds.length){
+      const {data:tournaments,error}=tournamentIds.length
+        ?await SUPA.client.from('tournaments').select('id,name,game,starts_at').in('id',tournamentIds)
+        :{data:[],error:null};
+      if(error)throw error;
+      queue.innerHTML=tournaments?.length?tournaments.map(tournament=>`<article class="dcard event-card"><div class="dh"><i data-lucide="gavel"></i>${esc(tournament.name)}<span class="mono-r">TOURNAMENT REFEREE</span></div><div class="db"><div class="team-meta"><span>${esc(GAMES[tournament.game]?.label||tournament.game)}</span><span>${esc(date(tournament.starts_at))}</span></div><p class="team-empty">You are assigned to this tournament. Matches will appear here after the organizer publishes them.</p><a class="btn btn-line btn-sm" href="tournament.html?id=${encodeURIComponent(tournament.id)}">Open tournament</a></div></article>`).join(''):'<div class="dcard" style="grid-column:1/-1"><div class="dh"><i data-lucide="gavel"></i>Referee assignments</div><div class="db"><p class="team-empty">Your match assignments have no published matches yet.</p></div></div>';
+      icons();return;
+    }
     const [submissionResult,evidenceResult]=await Promise.all([
       SUPA.client.from('match_result_submissions').select('id,match_id,registration_id,home_score,away_score,status,created_at').in('match_id',allIds).order('created_at',{ascending:false}),
       SUPA.client.from('match_evidence').select('id,match_id,object_key,mime_type,byte_size,created_at').in('match_id',allIds).order('created_at',{ascending:false})
@@ -35,10 +42,10 @@ Auth.ready.then(async()=>{
       const {data,error}=await SUPA.client.storage.from('match-evidence').createSignedUrl(row.object_key,120);
       if(error)throw error;return {...row,url:data.signedUrl};
     }));
-    const tournamentIds=[...new Set(matches.map(m=>m.tournament_id))];
+    const matchTournamentIds=[...new Set(matches.map(m=>m.tournament_id))];
     const registrationIds=[...new Set(matches.flatMap(m=>[m.home_registration_id,m.away_registration_id]).filter(Boolean))];
     const [tournaments,registrations]=await Promise.all([
-      tournamentIds.length?SUPA.client.from('tournaments').select('id,name,game,best_of').in('id',tournamentIds):{data:[],error:null},
+      matchTournamentIds.length?SUPA.client.from('tournaments').select('id,name,game,best_of').in('id',matchTournamentIds):{data:[],error:null},
       registrationIds.length?SUPA.client.from('tournament_registrations').select('id,team_id').in('id',registrationIds):{data:[],error:null}
     ]);
     if(tournaments.error)throw tournaments.error;if(registrations.error)throw registrations.error;

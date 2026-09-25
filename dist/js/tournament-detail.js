@@ -40,7 +40,11 @@ else (async()=>{
       if(error)throw error;stageStandings.set(stage.id,data||[]);
     }
 
-    let refereeMarkup='<p class="team-empty">Referee assignments are shown to participants and assigned officials after matches are scheduled.</p>';
+    const {data:assignedReferees,error:refereeError}=await SUPA.client.rpc('list_tournament_referee_names',{p_tournament_id:t.id});
+    if(refereeError)throw refereeError;
+    let refereeMarkup=assignedReferees?.length
+      ?`<ul class="team-invites">${assignedReferees.map(ref=>`<li class="event-reg"><span><b>${esc(ref.username||ref.player_name||'Assigned referee')}</b><small>Tournament referee</small></span></li>`).join('')}</ul>`
+      :'<p class="team-empty">No referee has been assigned to this tournament yet.</p>';
     const allMatches=matchResult.data||[];
     if(Auth.is()&&allMatches.length){
       const {data:officials,error:officialError}=await SUPA.client.from('match_officials').select('match_id,user_id').in('match_id',allMatches.map(m=>m.id));
@@ -49,7 +53,14 @@ else (async()=>{
       const {data:profiles,error:profileError}=userIds.length?await SUPA.client.from('public_profiles').select('id,username,player_name').in('id',userIds):{data:[],error:null};
       if(profileError)throw profileError;
       const profileMap=new Map((profiles||[]).map(row=>[row.id,row.username||row.player_name||'Assigned referee']));
-      refereeMarkup=officials?.length?`<ul class="team-invites">${officials.map(row=>{const match=allMatches.find(item=>item.id===row.match_id);return `<li class="event-reg"><span><b>${esc(profileMap.get(row.user_id)||'Assigned referee')}</b><small>Round ${match?.round_number} · Match ${match?.position}</small></span></li>`}).join('')}</ul>`:'<p class="team-empty">No referee assignments are visible to this account yet.</p>';
+      const assignedNames=new Set((assignedReferees||[]).map(ref=>String(ref.username||ref.player_name||'').trim().toLocaleLowerCase()).filter(Boolean));
+      const matchOfficials=(officials||[]).map(row=>{
+        const name=profileMap.get(row.user_id)||'Assigned referee';
+        if(assignedNames.has(name.trim().toLocaleLowerCase()))return '';
+        const match=allMatches.find(item=>item.id===row.match_id);
+        return `<li class="event-reg"><span><b>${esc(name)}</b><small>Round ${match?.round_number} · Match ${match?.position}</small></span></li>`;
+      }).join('');
+      if(matchOfficials)refereeMarkup=`<ul class="team-invites">${(assignedReferees||[]).map(ref=>`<li class="event-reg"><span><b>${esc(ref.username||ref.player_name||'Assigned referee')}</b><small>Tournament referee</small></span></li>`).join('')}${matchOfficials}</ul>`;
     }
 
     const teamFor=registrationId=>teamMap.get(regTeam.get(registrationId));
