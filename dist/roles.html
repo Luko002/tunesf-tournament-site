@@ -7,8 +7,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=Barlow:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=20260924g">
-<link rel="stylesheet" href="css/pages.css?v=20260924c">
+<link rel="stylesheet" href="/css/style.css?v=20260926c">
+<link rel="stylesheet" href="/css/pages.css?v=20260926e">
 </head>
 <body>
 
@@ -74,7 +74,7 @@
     <div><div class="eyebrow">Permission Matrix</div><h2>Who can do <span class="out">What</span></h2></div>
     <p class="sec-note">The enforcement table behind every console. ✅ = allowed by role. The platform checks this matrix on every action — never on the honor system.</p>
   </div>
-  <div class="tablewrap rv"><table class="mtx">
+  <div class="role-matrix-wrap rv"><div class="role-mobile"><label for="roleCompare">Show permissions for</label><select id="roleCompare" aria-controls="rolePermissionList"></select><ul class="mtx-mobile-list" id="rolePermissionList" aria-live="polite"></ul></div><div class="tablewrap"><table class="mtx">
     <thead><tr>
       <th>Action</th><th class="c">Player</th><th class="c">Captain</th><th class="c">Referee</th><th class="c">Moderator</th>
       <th class="c">Tourn. Admin</th><th class="c">Org Owner</th><th class="c">Platform Admin</th><th class="c">Super Admin</th>
@@ -100,7 +100,7 @@
       <tr><td>Grant roles &amp; permissions</td><td class="c"><span class="n">—</span></td><td class="c"><span class="n">—</span></td><td class="c"><span class="n">—</span></td><td class="c"><span class="n">—</span></td><td class="c"><span class="n">—</span></td><td class="c"><span class="n">—</span></td><td class="c"><span class="n">—</span></td><td class="c hl-col"><span class="y">✅</span></td></tr>
       <tr><td>Platform settings &amp; integrations (not configured)</td><td class="c"><span class="n">—</span></td><td class="c"><span class="n">—</span></td><td class="c"><span class="n">—</span></td><td class="c"><span class="n">—</span></td><td class="c"><span class="n">—</span></td><td class="c"><span class="n">—</span></td><td class="c"><span class="n">—</span></td><td class="c"><span class="n">—</span></td></tr>
     </tbody>
-  </table></div>
+  </table></div></div>
 </div></section>
 
 <!-- ================= RBAC NOTE ================= -->
@@ -140,8 +140,8 @@
 
 <script src="https://unpkg.com/lucide@1.47.0/dist/umd/lucide.min.js" integrity="sha384-v15JX+vZHMR3T6LQR9N6e6wIKrKOdNTbdj8j+e5irqq3L9gCauJz2vGlUzomWyUp" crossorigin="anonymous"></script>
 <script>if(!window.lucide){document.write('<script src="https://cdn.jsdelivr.net/npm/lucide@1.47.0/dist/umd/lucide.min.js" integrity="sha384-v15JX+vZHMR3T6LQR9N6e6wIKrKOdNTbdj8j+e5irqq3L9gCauJz2vGlUzomWyUp" crossorigin="anonymous"><\/script>')}</script>
-<script src="js/supabase-config.js?v=3"></script>
-<script src="js/core.js?v=20260925b"></script>
-<script src="js/roles.js?v=20260924c"></script>
+<script src="/js/supabase-config.js?v=3"></script>
+<script src="/js/core.js?v=20260926g"></script>
+<script src="/js/roles.js?v=20260926a"></script>
 </body>
 </html>

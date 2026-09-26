@@ -11,11 +11,11 @@ async function renderStandings(stageId){
   const {data:registrations,error:regError}=await SUPA.client.from('tournament_registrations').select('id,team_id').in('id',ids);
   if(regError)throw regError;
   const teamIds=[...new Set((registrations||[]).map(r=>r.team_id))];
-  const teamResult=teamIds.length?await SUPA.client.from('teams').select('id,name,tag').in('id',teamIds):{data:[],error:null};
+  const teamResult=teamIds.length?await SUPA.client.from('teams').select('id,name,tag,logo_path').in('id',teamIds):{data:[],error:null};
   if(teamResult.error)throw teamResult.error;
   const regMap=new Map((registrations||[]).map(r=>[r.id,r.team_id]));
   const teamMap=new Map((teamResult.data||[]).map(t=>[t.id,t]));
-  standingTable.innerHTML=`<div class="tablewrap"><table><thead><tr><th>Rank</th><th>Team</th><th>Played</th><th>W</th><th>D</th><th>L</th><th>Score diff</th><th>Points</th></tr></thead><tbody>${rows.map(row=>{const team=teamMap.get(regMap.get(row.registration_id));return `<tr><td>${row.rank}</td><td>${esc(team?.name||'Team unavailable')} <small>${esc(team?.tag||'')}</small></td><td>${row.played}</td><td>${row.wins}</td><td>${row.draws}</td><td>${row.losses}</td><td>${row.score_for-row.score_against}</td><td>${row.points}</td></tr>`;}).join('')}</tbody></table></div>`;
+  standingTable.innerHTML=`<div class="tablewrap"><table><thead><tr><th>Rank</th><th>Team</th><th>Played</th><th>W</th><th>D</th><th>L</th><th>Score diff</th><th>Points</th></tr></thead><tbody>${rows.map(row=>{const team=teamMap.get(regMap.get(row.registration_id));return `<tr><td>${row.rank}</td><td><span class="team-identity">${identityImage(team?.logo_path,team?.name||'Team',34,'team')}<a href="team.html?id=${encodeURIComponent(regMap.get(row.registration_id)||'')}">${esc(team?.name||'Team unavailable')} <small>${esc(team?.tag||'')}</small></a></span></td><td>${row.played}</td><td>${row.wins}</td><td>${row.draws}</td><td>${row.losses}</td><td>${row.score_for-row.score_against}</td><td>${row.points}</td></tr>`;}).join('')}</tbody></table></div>`;
 }
 function selectStandingTournament(id){
   const url=new URL(location.href);url.searchParams.set('tournament',id);history.replaceState(null,'',url);

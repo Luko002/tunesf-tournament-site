@@ -3,7 +3,7 @@ const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt=n=>Math.round(Number(n)||0).toLocaleString('en-US');
 const icons=()=>{try{window.lucide&&lucide.createIcons()}catch{}};
-function logoSvg(size=34){return `<svg width="${size}" height="${size}" viewBox="0 0 48 48" aria-hidden="true"><polygon points="24,3 43,13.5 43,34.5 24,45 5,34.5 5,13.5" fill="rgba(245,180,0,.1)" stroke="#F5B400" stroke-width="2.4"/><text x="24" y="30" text-anchor="middle" font-family="Chakra Petch" font-weight="700" font-size="13" fill="#F5B400">TF</text></svg>`;}
+function logoSvg(size=34){return `<img src="/assets/tunesf-mark.png" width="${size}" height="${size}" alt="TUNESF" style="object-fit:contain">`;}
 
 function toast(type,title,msg){
   const host=$('#toasts');if(!host)return;
@@ -37,9 +37,10 @@ const CONSOLES=[
 ];
 const SUPABASE_CONFIG=Object.assign({url:'',anonKey:''},window.TUNESF_SUPABASE||{});
 const SUPA={client:null};
+let DEMO_MODE=false;
 const LOCAL_ORIGIN=location.protocol==='file:'||['localhost','127.0.0.1'].includes(location.hostname);
 const READ_ONLY_PREVIEW=SUPABASE_CONFIG.environment==='production'&&LOCAL_ORIGIN;
-const READ_ONLY_RPCS=new Set(['get_my_roles','get_my_permissions','list_team_roster','list_team_invitations','list_public_clubs','list_public_team_rosters','get_team_captain_inbox','list_organizations_for_current_user','list_organization_staff']);
+const READ_ONLY_RPCS=new Set(['get_my_roles','get_my_permissions','list_team_roster','list_team_invitations','list_public_clubs','list_public_team_rosters','list_public_tournament_registrations','list_tournament_referee_names','list_public_player_achievements','get_team_captain_inbox','list_organizations_for_current_user','list_organization_staff','get_public_player_profile','get_public_team_profile','get_admin_analytics','list_tournament_registration_history']);
 function supabaseFetch(input,init){
   if(!READ_ONLY_PREVIEW)return fetch(input,init);
   const url=new URL(input instanceof Request?input.url:String(input),SUPABASE_CONFIG.url);
@@ -77,7 +78,7 @@ const Auth={
   async _loadUser(session){
     const id=session.user.id;
     const [profile,assigned,permissionRows]=await Promise.all([
-      SUPA.client.from('profiles').select('player_name,username,game,region,discord_username').eq('id',id).maybeSingle(),
+      SUPA.client.from('profiles').select('player_name,username,game,region,discord_username,avatar_path').eq('id',id).maybeSingle(),
       SUPA.client.rpc('get_my_roles'),SUPA.client.rpc('get_my_permissions')
     ]);
     if(profile.error)throw profile.error;if(assigned.error)throw assigned.error;if(permissionRows.error)throw permissionRows.error;
@@ -85,12 +86,72 @@ const Auth={
     if(!roleKeys.length)throw new Error('This account has no active TUNESF role.');
     roleKeys.sort((a,b)=>(ROLES[b]?.level||0)-(ROLES[a]?.level||0));
     this.permissions=new Set(permissionRows.data||[]);
-    this.user={id,email:session.user.email,name:profile.data?.username||profile.data?.player_name||session.user.email,game:profile.data?.game||null,discordUsername:profile.data?.discord_username||null,roles:roleKeys};
+    this.user={id,email:session.user.email,name:profile.data?.username||profile.data?.player_name||session.user.email,game:profile.data?.game||null,discordUsername:profile.data?.discord_username||null,avatarPath:profile.data?.avatar_path||null,roles:roleKeys};
   },
   async signInPassword(email,password){const {data,error}=await SUPA.client.auth.signInWithPassword({email,password});if(error)throw error;await this._loadUser(data.session);return this.user;},
   async signUp(username,email,password,discordUsername){return SUPA.client.auth.signUp({email,password,options:{data:{username,player_name:username,discord_username:discordUsername,game:'Not selected'},emailRedirectTo:location.origin}});}
 };
-Auth.ready=Auth.init();
+
+function publicMediaUrl(path){
+  if(!path||!SUPA.client)return '';
+  return SUPA.client.storage.from('public-media').getPublicUrl(path).data.publicUrl;
+}
+function identityImage(path,label,size=36,kind='team'){
+  const initials=String(label||'?').trim().split(/\s+/).slice(0,2).map(part=>part[0]||'').join('').replace(/[^a-z0-9]/gi,'').toUpperCase()||'?';
+  const cls=kind==='player'?'player-avatar':'team-logo';
+  const side=Math.max(16,Math.min(160,Number(size)||36)),style=`--identity-size:${side}px;width:${side}px;height:${side}px`;
+  return path?`<img class="identity-image ${cls}" style="${style}" src="${esc(publicMediaUrl(path))}" width="${side}" height="${side}" alt="${esc(label||kind)} ${kind==='player'?'profile picture':'logo'}" loading="lazy" decoding="async" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'identity-fallback ${cls}',textContent:'${esc(initials)}',style:'${style}'}))">`:`<span class="identity-fallback ${cls}" style="${style}" role="img" aria-label="${esc(label||kind)}">${esc(initials)}</span>`;
+}
+async function uploadPublicImage(file,folder){
+  if(!file)throw new Error('Choose an image to upload.');
+  if(!['image/jpeg','image/png','image/webp'].includes(file.type))throw new Error('Choose a JPG, PNG, or WebP image.');
+  if(file.size>5*1024*1024)throw new Error('Images must be 5 MB or smaller.');
+  if(!Auth.user?.id)throw new Error('Sign in before uploading an image.');
+  const ext={ 'image/jpeg':'jpg','image/png':'png','image/webp':'webp' }[file.type];
+  const name=crypto.randomUUID().replaceAll('-','')+'.'+ext;
+  const path=`${folder}/${Auth.user.id}/${name}`;
+  const {error}=await SUPA.client.storage.from('public-media').upload(path,file,{contentType:file.type,cacheControl:'31536000',upsert:false});
+  if(error)throw error;
+  return path;
+}
+async function removePublicImage(path){
+  if(!path||!SUPA.client)return;
+  const {error}=await SUPA.client.storage.from('public-media').remove([path]);
+  if(error)console.warn('Old profile or team image could not be removed:',error.message);
+}
+Auth.ready=Auth.init().catch(error=>{
+  console.warn('TUNESF backend unavailable; using public demo mode:',error.message||error);
+  DEMO_MODE=true;
+  const roles=[['VISITOR','Visitor',0,'eye'],['PLAYER','Player',1,'user'],['CAPTAIN','Captain',2,'users'],['REFEREE','Referee',3,'gavel'],['TOURNAMENT_ADMIN','Tournament Admin',4,'trophy'],['ORGANIZATION_OWNER','Organization Owner',5,'landmark'],['MODERATOR','Moderator',6,'flag'],['PLATFORM_ADMIN','Platform Admin',7,'shield'],['SUPER_ADMIN','Super Admin',8,'shield-check']];
+  roles.forEach(([key,label,level,icon])=>{ROLE_ORDER.push(key);ROLES[key]={label,level,icon,cls:`r-${String(key).toLowerCase().replaceAll('_','-')}`,perms:[]};LANDING[key]='index.html';});
+  loadDemoData();
+});
+
+function loadDemoData(){
+  const date=(days,hour=19)=>{const d=new Date();d.setDate(d.getDate()+days);d.setHours(hour,0,0,0);return d.toISOString();};
+  const sample=[
+    {id:'demo-valorant-open',name:'TUNESF National VALORANT Open',game:'val',prize:1200,currency:'TND',teams:18,max:32,startsAt:date(9),status:'reg',loc:'Tunis, Tunisia',fmt:'SINGLE ELIMINATION · BO3',org:'TUNESF',desc:'Tunisia’s top VALORANT teams clash for the national title. Assemble your roster and claim a place on the stage.',cover:'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=1200&q=85'},
+    {id:'demo-cs2-cup',name:'Carrefour CS2 Champions Cup',game:'cs2',prize:850,currency:'TND',teams:11,max:16,startsAt:date(16),status:'reg',loc:'Sousse, Tunisia',fmt:'DOUBLE ELIMINATION · BO3',org:'TUNESF',desc:'A high stakes Counter-Strike showdown featuring the country’s rising competitive squads.',cover:'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=1200&q=85'},
+    {id:'demo-rl-series',name:'Tunisian Rocket League Series',game:'rl',prize:500,currency:'TND',teams:21,max:32,startsAt:date(24),status:'reg',loc:'Online · Tunisia',fmt:'SWISS · BO5',org:'TUNESF',desc:'Fast rotations, aerial plays and a path to the Tunisian Rocket League podium.',cover:'https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&w=1200&q=85'}
+  ];
+  TOURN.splice(0,TOURN.length,...sample.map(t=>({...t,statusKey:'registration_open',when:new Intl.DateTimeFormat(undefined,{dateStyle:'medium',timeStyle:'short'}).format(new Date(t.startsAt))})));
+}
+const demoMatches=[
+  {tournament:'TUNESF National VALORANT Open',home:'Carthage Phoenix',away:'Sahara Wolves',homeScore:13,awayScore:9,status:'completed',round:'Grand Final',game:'val'},
+  {tournament:'Carrefour CS2 Champions Cup',home:'Atlas Gaming',away:'Red Dunes',homeScore:0,awayScore:0,status:'scheduled',round:'Semi Final',game:'cs2'},
+  {tournament:'Tunisian Rocket League Series',home:'Blue Medina',away:'Oasis FC',homeScore:0,awayScore:0,status:'scheduled',round:'Round 1',game:'rl'}
+];
+function renderDemoData(){
+  const page=currentPage();
+  if(page==='standings.html'){
+    const target=$('#stBody');
+    if(target)target.innerHTML=`<tr><td>1</td><td>Carthage Phoenix</td><td>12</td><td>2</td><td>+24</td><td>36</td><td><span class="chip gold">QUALIFIED</span></td></tr><tr><td>2</td><td>Atlas Gaming</td><td>10</td><td>4</td><td>+18</td><td>30</td><td><span class="chip green">ACTIVE</span></td></tr><tr><td>3</td><td>Sahara Wolves</td><td>9</td><td>5</td><td>+11</td><td>27</td><td><span class="chip green">ACTIVE</span></td></tr><tr><td>4</td><td>Blue Medina</td><td>8</td><td>6</td><td>+7</td><td>24</td><td><span class="chip">ACTIVE</span></td></tr>`;
+  }
+  if(page==='bracket.html'){
+    const canvas=$('#bcanvas');
+    if(canvas)canvas.innerHTML=`<div class="demo-bracket"><article><h3>QUARTER FINALS</h3><p>Atlas Gaming <b>2</b></p><p>Carthage Knights <b>0</b></p><p>Sahara Wolves <b>2</b></p><p>Desert Foxes <b>1</b></p></article><article><h3>SEMI FINALS</h3><p>Atlas Gaming <b>1</b></p><p>Sahara Wolves <b>2</b></p></article><article><h3>GRAND FINAL · COMPLETE</h3><p>Carthage Phoenix <b>2</b></p><p>Sahara Wolves <b>1</b></p><span class="chip gold">CHAMPIONS · CARTHAGE PHOENIX</span></article></div>`;
+  }
+}
 
 async function loadPublicData(){
   const {data,error}=await SUPA.client.from('tournament_directory').select('*').order('starts_at',{ascending:true,nullsFirst:false});
@@ -102,16 +163,20 @@ async function loadPublicData(){
     if(coverError)console.warn('Tournament covers could not be loaded:',coverError.message);
     else coverUrls=new Map((signed||[]).filter(row=>row.signedUrl).map(row=>[row.path,row.signedUrl]));
   }
-  TOURN.splice(0,TOURN.length,...rows.map(t=>({
+  const now=Date.now();
+  TOURN.splice(0,TOURN.length,...rows.map(t=>{
+    const effectiveStatus=t.status==='registration_open'&&t.registration_opens_at&&new Date(t.registration_opens_at).getTime()>now?'registration_scheduled'
+      :t.status==='registration_open'&&(t.registration_closes_at||t.starts_at)&&new Date(t.registration_closes_at||t.starts_at).getTime()<=now?'registration_closed':t.status;
+    return ({
     id:t.id,name:t.name,game:t.game,prize:Number(t.prize_pool)||0,currency:t.currency||'TND',teams:Number(t.registered_teams)||0,max:Number(t.max_teams)||0,
-    startsAt:t.starts_at||null,statusKey:t.status,
-    status:({registration_open:'reg',registration_closed:'closed',in_progress:'live',completed:'closed',cancelled:'closed',draft:'soon'})[t.status]||'soon',
+    startsAt:t.starts_at||null,statusKey:effectiveStatus,
+    status:({registration_open:'reg',registration_scheduled:'soon',registration_closed:'closed',in_progress:'live',completed:'closed',cancelled:'closed',draft:'soon'})[effectiveStatus]||'soon',
     when:t.starts_at?new Intl.DateTimeFormat(undefined,{dateStyle:'medium',timeStyle:'short'}).format(new Date(t.starts_at)):'Date to be announced',
     loc:t.region||'Location to be announced',fmt:`${String(t.format||'').replaceAll('_',' ').toUpperCase()} · ${/^BO\d+$/i.test(String(t.best_of||''))?String(t.best_of).toUpperCase():`BO${Number(t.best_of)||1}`}`,
     org:'Tournament organizer',desc:t.description||'The organizer has not added a description yet.',cover:coverUrls.get(t.cover_image_path)||''
-  })));
+  });}));
 }
-function boot(fn){Auth.ready.then(async()=>{if(['index.html','tournaments.html'].includes(currentPage()))await loadPublicData();return fn()}).catch(e=>{console.error('Startup failed:',e);toast('err','Could not load the site',String(e?.message||e));});}
+function boot(fn){Auth.ready.then(async()=>{if(!DEMO_MODE&&['index.html','tournaments.html'].includes(currentPage()))await loadPublicData();if(DEMO_MODE)renderDemoData();return fn()}).catch(e=>{console.error('Startup failed:',e);toast('err','Could not load the site',String(e?.message||e));});}
 function requirePerm(perm){if(Auth.has(perm))return true;const role=ROLE_FOR_PERM[perm]||'PLAYER';const next=currentPage();location.replace('login.html?next='+encodeURIComponent(next)+'&need='+encodeURIComponent(role));return false;}
 
 const TMODAL_HTML=`<div class="overlay" id="tmodal"><div class="modal cut"><div class="cut-in"><button class="iconbtn m-close" id="mClose" aria-label="Close"><i data-lucide="x"></i></button><img class="m-img" id="mImg" alt=""><div class="m-content"><div class="m-chips" id="mChips"></div><h2 id="mName"></h2><p id="mDesc"></p><div class="m-info"><div><small>Prize pool</small><b id="mPrize"></b></div><div><small>Teams</small><b id="mTeams"></b></div><div><small>Starts</small><b id="mDates"></b></div><div><small>Format</small><b id="mFmt"></b></div><div><small>Region</small><b id="mLoc"></b></div><div><small>Organizer</small><b id="mOrg"></b></div></div><label id="mTeamWrap" hidden style="display:block;margin:14px 0"><span>Choose your team</span><select id="mTeam"></select></label><div class="m-acts"><button class="btn btn-gold" id="mReg" type="button">Register a team</button><a class="btn btn-line" href="tournaments.html" id="mBracket">Open tournament page</a></div></div></div></div></div>`;
@@ -120,9 +185,10 @@ const TMODAL_HTML=`<div class="overlay" id="tmodal"><div class="modal cut"><div 
   const ticker=document.createElement('div');ticker.className='ticker';ticker.setAttribute('role','region');ticker.setAttribute('aria-label','TUNESF federation updates');
   const updates=['TEST 2026','LEAGUE OF LEGENDS ', 'REGISTRATION IS OPEN','MORE GAMES','BIGGER CASH PRIZE'];
   const tickerItems=updates.map(text=>`<span>${text}<i class="g">◆</i></span>`).join('');
-  ticker.innerHTML=`<span class="ticker-label">${updates.join(' · ')}</span><div class="tk" aria-hidden="true">${tickerItems}${tickerItems}</div>`;
+  ticker.innerHTML=`<span class="ticker-label">${updates.join(' · ')}</span><div class="tk" aria-hidden="true"><div class="tk-group">${tickerItems}</div><div class="tk-group">${tickerItems}</div></div>`;
   $('#topbar')?.insertAdjacentElement('afterend',ticker);
-  if(READ_ONLY_PREVIEW){const notice=document.createElement('div');notice.className='preview-notice';notice.setAttribute('role','status');notice.textContent='LOCAL PREVIEW · CONNECTED TO PRODUCTION · CHANGES ARE DISABLED';document.body.classList.add('preview-readonly');ticker.insertAdjacentElement('afterend',notice);}
+  if(DEMO_MODE){const notice=document.createElement('div');notice.className='preview-notice';notice.setAttribute('role','status');notice.textContent='DEMO MODE · SAMPLE TOURNAMENTS · ACCOUNT ACTIONS UNAVAILABLE';document.body.classList.add('preview-readonly');ticker.insertAdjacentElement('afterend',notice);}
+  else if(READ_ONLY_PREVIEW){const notice=document.createElement('div');notice.className='preview-notice';notice.setAttribute('role','status');notice.textContent='LOCAL PREVIEW · CONNECTED TO PRODUCTION · CHANGES ARE DISABLED';document.body.classList.add('preview-readonly');ticker.insertAdjacentElement('afterend',notice);}
   else if(SUPABASE_CONFIG.environment==='local'){const notice=document.createElement('div');notice.className='preview-notice';notice.setAttribute('role','status');notice.textContent='LOCAL TEST DATABASE · CHANGES ARE ISOLATED FROM PRODUCTION';ticker.insertAdjacentElement('afterend',notice);}
 })();
 
@@ -141,10 +207,51 @@ function buildNav(){
   }
   const cta=$('#navCta');if(cta){
     const role=ROLES[Auth.highestRole()];
-    cta.innerHTML=`${Auth.is()?`<span class="who"><span class="rolechip ${role?.cls||''}">${esc(role?.label||'Member')}</span><span class="uname">${esc(Auth.user.name)}</span><button class="iconbtn" id="signOutBtn" title="Sign out"><i data-lucide="log-out"></i></button></span>`:'<a class="btn btn-line btn-sm" href="login.html">Sign in</a>'}<a class="btn btn-gold btn-sm" id="navCreate" href="${Auth.has('CREATE_TOURNAMENT')?'organize.html':'tournaments.html'}">${Auth.has('CREATE_TOURNAMENT')?'Create tournament':'Find a tournament'}</a><button class="iconbtn" id="burger" aria-label="Menu"><i data-lucide="menu"></i></button>`;
+    cta.innerHTML=`${Auth.is()?`<span class="who"><span class="rolechip ${role?.cls||''}">${esc(role?.label||'Member')}</span><span class="uname">${esc(Auth.user.name)}</span><button class="iconbtn" id="signOutBtn" title="Sign out"><i data-lucide="log-out"></i></button></span><button class="iconbtn notification-toggle" id="notificationToggle" type="button" aria-label="Notifications"><i data-lucide="bell"></i><span id="notificationUnread" class="notification-unread" hidden></span></button>`:'<a class="btn btn-line btn-sm" href="login.html">Sign in</a>'}<a class="btn btn-gold btn-sm" id="navCreate" href="${Auth.has('CREATE_TOURNAMENT')?'organize.html':'tournaments.html'}">${Auth.has('CREATE_TOURNAMENT')?'Create tournament':'Find a tournament'}</a><button class="iconbtn" id="burger" aria-label="Menu"><i data-lucide="menu"></i></button>`;
     $('#signOutBtn')?.addEventListener('click',()=>Auth.signOut());$('#burger')?.addEventListener('click',()=>$('#topbar')?.classList.toggle('nav-open'));
+    $('#notificationToggle')?.addEventListener('click',()=>toggleNotifications());
   }
   icons();
+}
+const notificationHref=n=>n.entity_type==='match'?`match-room.html?id=${encodeURIComponent(n.entity_id||'')}`:n.entity_type==='tournament'?`tournament.html?id=${encodeURIComponent(n.entity_id||'')}`:n.entity_type==='team'?'clubs.html':'dashboard.html';
+function ensureNotificationPanel(){
+  if($('#notificationPanel'))return;
+  document.body.insertAdjacentHTML('beforeend',`<section class="notification-panel" id="notificationPanel" aria-label="Notifications" aria-live="polite" hidden><div class="notification-panel-head"><div><b>Notifications</b><small id="notificationPanelStatus">Recent account and tournament updates</small></div><button class="btn btn-line btn-sm" id="notificationMarkAll" type="button">Mark all read</button></div><div class="notification-list" id="notificationList"><p class="team-empty">Sign in to see your notifications.</p></div></section>`);
+  $('#notificationMarkAll')?.addEventListener('click',markAllNotificationsRead);
+  $('#notificationList')?.addEventListener('click',async event=>{
+    const button=event.target.closest('[data-notification-read]');if(!button)return;
+    button.disabled=true;try{await markNotificationRead(button.dataset.notificationRead);await refreshNotifications();}catch(error){toast('err','Could not update notification',error.message||'Please try again.');button.disabled=false;}
+  });
+  document.addEventListener('click',event=>{if(!event.target.closest('#notificationPanel,#notificationToggle'))$('#notificationPanel')?.setAttribute('hidden','');});
+}
+function toggleNotifications(){
+  ensureNotificationPanel();const panel=$('#notificationPanel');
+  if(panel.hidden){panel.removeAttribute('hidden');void refreshNotifications();}else panel.setAttribute('hidden','');
+}
+async function markNotificationRead(id){
+  const {error}=await SUPA.client.from('notifications').update({read_at:new Date().toISOString()}).eq('id',id).is('read_at',null);
+  if(error)throw error;
+}
+async function markAllNotificationsRead(){
+  const button=$('#notificationMarkAll');if(button)button.disabled=true;
+  try{
+    const {error}=await SUPA.client.from('notifications').update({read_at:new Date().toISOString()}).is('read_at',null);
+    if(error)throw error;await refreshNotifications();
+  }catch(error){toast('err','Could not update notifications',error.message||'Please try again.');}
+  finally{if(button)button.disabled=false;}
+}
+async function refreshNotifications(){
+  if(!Auth.is()||!SUPA.client)return;
+  ensureNotificationPanel();
+  const [listResult,countResult]=await Promise.all([
+    SUPA.client.from('notifications').select('id,title,message,type,entity_type,entity_id,read_at,created_at').order('created_at',{ascending:false}).limit(50),
+    SUPA.client.from('notifications').select('id',{count:'exact',head:true}).is('read_at',null)
+  ]);
+  if(listResult.error)throw listResult.error;if(countResult.error)throw countResult.error;
+  const count=countResult.count||0,badge=$('#notificationUnread'),list=$('#notificationList'),status=$('#notificationPanelStatus');
+  if(badge){badge.hidden=count===0;badge.textContent=count>99?'99+':String(count);$('#notificationToggle')?.setAttribute('aria-label',count?`Notifications, ${count} unread`:'Notifications');}
+  if(status)status.textContent=count?`${fmt(count)} unread · latest 50 shown`:'You are all caught up';
+  if(list)list.innerHTML=listResult.data?.length?listResult.data.map(n=>`<article class="notification-item${n.read_at?'':' unread'}"><a href="${notificationHref(n)}" data-notification-open="${esc(n.id)}"><b>${esc(n.title)}</b><span>${esc(n.message)}</span><small>${esc(new Intl.DateTimeFormat(undefined,{dateStyle:'medium',timeStyle:'short'}).format(new Date(n.created_at)))}</small></a>${n.read_at?'':'<button class="notification-read" type="button" data-notification-read="'+esc(n.id)+'" aria-label="Mark as read">Mark read</button>'}</article>`).join(''):'<p class="team-empty">No notifications yet. Tournament and match updates will appear here.</p>';
 }
 function buildConsoleStrip(){const el=$('#consoleStrip');if(!el)return;el.innerHTML=Auth.consoles().map(c=>`<a class="cchip${c.href===currentPage()?' act':''}" href="${c.href}"><i data-lucide="${c.icon}"></i>${esc(c.label)}</a>`).join('');icons();}
 
@@ -185,4 +292,4 @@ function closeModal(){$('#tmodal')?.classList.remove('open');document.body.class
 document.addEventListener('click',e=>{if(e.target.closest('[data-tournament-detail]'))return;const card=e.target.closest('.t-card[data-t]');if(card){openT(TOURN.find(t=>String(t.id)===card.dataset.t));return;}if(e.target.closest('#mClose')||e.target.id==='tmodal')closeModal();});
 addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();});
 
-Auth.ready.then(()=>{buildNav();buildConsoleStrip();icons();}).catch(e=>{console.error('Authentication initialization failed:',e);buildNav();icons();});
+Auth.ready.then(()=>{buildNav();buildConsoleStrip();if(Auth.is()){ensureNotificationPanel();refreshNotifications().catch(error=>console.warn('Notifications unavailable:',error));setInterval(()=>{if(!document.hidden)refreshNotifications().catch(error=>console.warn('Notification refresh failed:',error));},30000);}icons();}).catch(e=>{console.error('Authentication initialization failed:',e);buildNav();icons();});

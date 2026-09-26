@@ -27,6 +27,7 @@ function renderT(){
   $('#sortSel').onchange=e=>{FILT.sort=e.target.value;renderT();};
   $('#refreshTournaments').onclick=async event=>{
     const button=event.currentTarget;button.disabled=true;
+    if(DEMO_MODE){renderT();toast('info','Demo tournaments refreshed','These sample events are for preview only.');button.disabled=false;return;}
     try{await loadPublicData();renderT();toast('ok','Tournament list refreshed',`${TOURN.length} tournaments are up to date.`);}
     catch(error){toast('err','Could not refresh tournaments',error.message||'Please try again.');}
     finally{button.disabled=false;}

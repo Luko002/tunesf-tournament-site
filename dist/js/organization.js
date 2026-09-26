@@ -33,14 +33,14 @@ Auth.ready.then(async()=>{
       const canManageTeams=isSuperAdmin||org.owner_id===Auth.user.id||(myCaps.get(org.id)||[]).includes('manage_teams');
       const canStaff=isSuperAdmin||org.owner_id===Auth.user.id||(myCaps.get(org.id)||[]).includes('manage_staff');
       const [teams,members]=await Promise.all([
-        SUPA.client.from('teams').select('id,name,tag,game,region,captain_id').eq('organization_id',org.id).order('name'),
+        SUPA.client.from('teams').select('id,name,tag,game,region,captain_id,logo_path').eq('organization_id',org.id).order('name'),
         canStaff?SUPA.client.rpc('list_organization_staff',{p_organization_id:org.id}):Promise.resolve({data:[],error:null})
       ]);
       if(teams.error)throw teams.error;if(members.error)throw members.error;
       const captains=canManageTeams?await SUPA.client.rpc('list_organization_player_accounts',{p_organization_id:org.id}):{data:[],error:null};
       if(captains.error)throw captains.error;
       const captainOptions=(captains.data||[]).map(p=>`<option value="${esc(p.user_id)}">${esc(p.username||p.player_name||p.user_id)}</option>`).join('');
-      const teamRows=(teams.data||[]).map(t=>`<li class="event-reg"><div><b>${esc(t.name)} <small>${esc(t.tag)}</small></b><small>${esc(GAMES[t.game]?.label||t.game)} · ${esc(t.region||'Region not set')}</small>${canManageTeams?`<form class="organization-captain-form" data-org-captain="${esc(t.id)}"><label><span>Game captain</span><select name="captain_id" required><option value="">Choose a player</option>${(captains.data||[]).map(p=>`<option value="${esc(p.user_id)}"${p.user_id===t.captain_id?' selected':''}>${esc(p.username||p.player_name||p.user_id)}</option>`).join('')}</select></label><button class="btn btn-line btn-sm" type="submit">Save captain</button></form>`:''}</div></li>`).join('')||'<li class="team-empty">No game teams yet. Add the first roster below.</li>';
+      const teamRows=(teams.data||[]).map(t=>`<li class="event-reg"><div class="team-identity">${identityImage(t.logo_path,t.name,36,'team')}<div><b>${esc(t.name)} <small>${esc(t.tag)}</small></b><small>${esc(GAMES[t.game]?.label||t.game)} · ${esc(t.region||'Region not set')}</small>${canManageTeams?`<form class="organization-captain-form" data-org-captain="${esc(t.id)}"><label><span>Game captain</span><select name="captain_id" required><option value="">Choose a player</option>${(captains.data||[]).map(p=>`<option value="${esc(p.user_id)}"${p.user_id===t.captain_id?' selected':''}>${esc(p.username||p.player_name||p.user_id)}</option>`).join('')}</select></label><button class="btn btn-line btn-sm" type="submit">Save captain</button></form>`:''}</div></div></li>`).join('')||'<li class="team-empty">No game teams yet. Add the first roster below.</li>';
       const memberRows=(members.data||[]).map(m=>{
         const name=m.player_name||m.username||'Account';
         const permissions=(m.capabilities||[]).map(c=>`<span>${esc(capabilityLabels[c]||c)}</span>`).join('')||'<span class="org-no-access">No permissions</span>';

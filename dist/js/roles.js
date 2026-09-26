@@ -1,5 +1,20 @@
 /* Display the permission matrix stored by the federation, without claiming scoped powers are global. */
-document.querySelectorAll('.tree,table.mtx,.codebox').forEach(el=>el.closest('section')?.remove());
+document.querySelectorAll('.tree,.codebox').forEach(el=>el.closest('section')?.remove());
+const rolePicker=document.querySelector('#roleCompare'),roleList=document.querySelector('#rolePermissionList'),roleTable=document.querySelector('table.mtx');
+if(rolePicker&&roleList&&roleTable){
+  const headers=[...roleTable.tHead.rows[0].cells].slice(1).map(cell=>cell.textContent.trim());
+  rolePicker.innerHTML=headers.map((name,index)=>`<option value="${index+1}">${esc(name)}</option>`).join('');
+  const renderRole=()=>{
+    const col=Number(rolePicker.value);
+    roleList.innerHTML=[...roleTable.tBodies[0].rows].map(row=>{
+      const permission=row.cells[0].textContent.trim(),cell=row.cells[col],allowed=!!cell.querySelector('.y');
+      const qualifier=cell.textContent.replace('✅','').trim();
+      const value=allowed?`Allowed${qualifier?` · ${qualifier}`:''}`:'No access';
+      return `<li><span>${esc(permission)}</span><b class="${allowed?'yes':'no'}">${esc(value)}</b></li>`;
+    }).join('');
+  };
+  rolePicker.addEventListener('change',renderRole);renderRole();
+}
 boot(()=>{
   const host=$('#roleCards');
   if(host){

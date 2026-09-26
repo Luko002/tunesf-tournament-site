@@ -7,7 +7,7 @@ Auth.ready.then(async()=>{
   buildConsoleStrip();
   const workspace=$('#adminWorkspace');
   const globalRoles=['REFEREE','MODERATOR','TOURNAMENT_ADMIN','PLATFORM_ADMIN','SUPER_ADMIN'];
-  const sections=[`<section class="dcard" style="grid-column:1/-1"><div class="dh"><i data-lucide="activity"></i>Platform metrics<span class="mono-r" id="adminMetricsUpdated">Loading…</span></div><div class="db"><div id="adminMetrics" class="kpis" aria-live="polite"></div><button class="btn btn-line btn-sm" id="refreshAdminMetrics" type="button">Refresh metrics</button></div></section>`];
+  const sections=[`<section class="dcard" style="grid-column:1/-1"><div class="dh"><i data-lucide="activity"></i>Platform analytics<span class="mono-r" id="adminMetricsUpdated">Loading…</span></div><div class="db"><div id="adminMetrics" class="kpis" aria-live="polite"></div><div id="adminAnalyticsCharts" class="analytics-grid" aria-live="polite"></div><button class="btn btn-line btn-sm" id="refreshAdminMetrics" type="button">Refresh analytics</button></div></section>`];
   if(Auth.has('MANAGE_SCHEDULE'))sections.push(`<section class="dcard"><div class="dh"><i data-lucide="git-fork"></i>Tournament operations</div><div class="db"><p>Review entries, publish a bracket once at least two teams are approved, and start the tournament.</p><a class="btn btn-gold btn-sm" href="event-admin.html">Manage tournaments &amp; brackets</a></div></section>`);
   if(canAssign)sections.push(`<section class="dcard"><div class="dh"><i data-lucide="users"></i>Global role assignments</div><div class="db">
     <form id="roleGrantForm" class="team-create-form"><label><span>User UUID</span><input name="user_id" required pattern="[0-9a-fA-F-]{36}" placeholder="Supabase account ID"></label><label><span>Role</span><select name="role">${globalRoles.map(r=>`<option>${r}</option>`).join('')}</select></label><button class="btn btn-gold btn-sm" type="submit">Grant role</button></form>
@@ -17,31 +17,21 @@ Auth.ready.then(async()=>{
   if(!canAssign&&!canAudit)sections.push('<section class="dcard"><div class="dh">Administration</div><div class="db"><p>You do not have permission to manage global roles or view audit events.</p></div></section>');
   workspace.innerHTML=sections.join('');icons();
   const report=(title,error)=>toast('err',title,error?.message||'Please try again.');
-  const metricSources=[
-    {label:'Public player profiles',table:'public_profiles',column:'id'},
-    {label:'Teams',table:'teams',column:'id'},
-    {label:'Published tournaments',table:'tournament_directory',column:'id',filter:q=>q.neq('status','draft')},
-    {label:'Live matches',table:'tournament_matches',column:'id',filter:q=>q.eq('status','live')},
-    {label:'Open disputes visible to you',table:'match_disputes',column:'id',filter:q=>q.in('status',['open','under_review'])},
-    {label:'Open reports visible to you',table:'moderation_cases',column:'id',filter:q=>q.in('status',['open','under_review'])}
-  ];
   async function loadMetrics(){
-    const host=$('#adminMetrics'),updated=$('#adminMetricsUpdated');
+    const host=$('#adminMetrics'),charts=$('#adminAnalyticsCharts'),updated=$('#adminMetricsUpdated');
     if(!host)return;
     updated.textContent='Loading…';
-    host.innerHTML=metricSources.map((metric,index)=>`<div class="kpi"><b id="adminMetric${index}">…</b><span>${esc(metric.label)}</span></div>`).join('');
-    const results=await Promise.allSettled(metricSources.map(metric=>{
-      let query=SUPA.client.from(metric.table).select(metric.column,{count:'exact',head:true});
-      if(metric.filter)query=metric.filter(query);
-      return query;
-    }));
-    let failures=0;
-    results.forEach((result,index)=>{
-      const value=$(`#adminMetric${index}`);
-      if(result.status==='fulfilled'&&!result.value.error)value.textContent=fmt(result.value.count);
-      else{failures++;value.textContent='—';value.setAttribute('aria-label','Unavailable');}
-    });
-    updated.textContent=failures?`${failures} count${failures===1?'':'s'} unavailable`:`Updated ${new Intl.DateTimeFormat(undefined,{timeStyle:'short'}).format(new Date())}`;
+    host.innerHTML='<div class="team-empty">Loading platform totals…</div>';if(charts)charts.innerHTML='';
+    const {data,error}=await SUPA.client.rpc('get_admin_analytics');if(error)throw error;
+    const totals=data?.totals||{},metrics=[['Total users','users'],['Teams','teams'],['Tournaments','tournaments'],['Active tournaments','active_tournaments'],['Completed matches','completed_matches'],['Registered players','registered_players']];
+    host.innerHTML=metrics.map(([label,key])=>`<div class="kpi"><b>${fmt(totals[key])}</b><span>${esc(label)}</span></div>`).join('');
+    const gameLabel=key=>GAMES[key]?.label||key;
+    const chart=(title,items,labelKey='month')=>{
+      const rows=items||[],max=Math.max(1,...rows.map(row=>Number(row.value??row.registrations)||0));
+      return `<section class="analytics-chart"><h3>${esc(title)}</h3>${rows.length?`<ol>${rows.map(row=>{const value=Number(row.value??row.registrations)||0,label=labelKey==='game'?gameLabel(row.game):row.month;return `<li><span title="${esc(label)}">${esc(label)}</span><i><b style="width:${Math.round(value/max*100)}%"></b></i><strong>${fmt(value)}</strong></li>`}).join('')}</ol>`:'<p class="team-empty">No data yet.</p>'}</section>`;
+    };
+    if(charts)charts.innerHTML=chart('User growth',data.user_growth)+chart('Tournament participation',data.tournament_participation)+chart('Completed matches',data.completed_matches)+chart('Popular games',data.popular_games,'game');
+    updated.textContent=`Updated ${new Intl.DateTimeFormat(undefined,{timeStyle:'short'}).format(new Date())}`;icons();
   }
   async function loadRoles(){
     if(!canAssign)return;

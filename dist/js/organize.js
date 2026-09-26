@@ -32,8 +32,12 @@ $$('#wStruct button').forEach(b=>b.onclick=()=>{$$('#wStruct button').forEach(x=
 $$('#wSeries button').forEach(b=>b.onclick=()=>{$$('#wSeries button').forEach(x=>x.classList.remove('act'));b.classList.add('act');WSEL.series=b.dataset.v;});
 renderMaps();
 $('#wAc').onclick=()=>$('#wAc').classList.toggle('act');
-$('#wDate').value=new Date(Date.now()+21*864e5).toISOString().slice(0,10);
-$('#wDate').min=new Date().toISOString().slice(0,10);
+const localDateTimeInput=value=>{const d=new Date(value);return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,16);};
+const defaultStart=new Date(Date.now()+21*864e5);defaultStart.setHours(18,0,0,0);
+$('#wDate').value=localDateTimeInput(defaultStart);$('#wDate').min=localDateTimeInput(new Date(Date.now()+60000));
+$('#wRegistrationOpens').value=localDateTimeInput(new Date(Date.now()+60000));
+$('#wRegistrationCloses').value=localDateTimeInput(defaultStart);$('#wRegistrationCloses').min=$('#wRegistrationOpens').value;
+$('#wRegistrationOpens').addEventListener('change',()=>{$('#wRegistrationCloses').min=$('#wRegistrationOpens').value;});
 function updDist(){
   const pool=Math.round((+$('#wPrize').value||0)*100)/100;
   const first=Math.max(0,Math.min(100,Math.trunc(+$('#wFirstShare').value||0))),second=100-first;
@@ -44,23 +48,33 @@ function updDist(){
 }
 $('#wPrize').addEventListener('input',updDist);$('#wFirstShare').addEventListener('input',updDist);updDist();
 
-function wGo(i){wI=i;
-  $$('.wstep').forEach(s=>{const k=+s.dataset.i;s.classList.toggle('act',k===i);s.classList.toggle('done',k<i);});
+function wGo(i){wI=i;$('#wError').textContent='';
+  $$('.wstep').forEach(s=>{const k=+s.dataset.i;s.classList.toggle('act',k===i);s.classList.toggle('done',k<i);if(k===i)s.setAttribute('aria-current','step');else s.removeAttribute('aria-current');});
   $$('.wpane').forEach(p=>p.classList.toggle('act',+p.dataset.w===i));
-  $('#wBack').disabled=i===0; $('#wCount').textContent=`STEP ${i+1} / 5`;
+  $('#wBack').disabled=i===0; $('#wCount').textContent=i<4?`STEP ${i+1} OF 5 · NEXT: ${WSTEPS[i+1]}`:'STEP 5 OF 5 · REVIEW YOUR EVENT';
   $('#wNext').innerHTML=i===4?'<i data-lucide="megaphone"></i>PUBLISH':'NEXT<i data-lucide="chevron-right"></i>'; icons();
   if(i===4)wSum();}
 function wSum(){const maps=$$('#wMaps button.act').length;
   const st={single:'Single elimination',double:'Double elimination',rr:'Round robin → playoffs'}[WSEL.struct];
-  const d=$('#wDate').value?new Date($('#wDate').value).toDateString().slice(4).toUpperCase():'TBA';
+  const d=$('#wDate').value?new Intl.DateTimeFormat(undefined,{dateStyle:'medium',timeStyle:'short'}).format(new Date($('#wDate').value)):'TBA';
+  const registrationOpens=$('#wRegistrationOpens').value?new Intl.DateTimeFormat(undefined,{dateStyle:'medium',timeStyle:'short'}).format(new Date($('#wRegistrationOpens').value)):'Not set';
+  const registrationCloses=$('#wRegistrationCloses').value?new Intl.DateTimeFormat(undefined,{dateStyle:'medium',timeStyle:'short'}).format(new Date($('#wRegistrationCloses').value)):'Not set';
   const cover=$('#wCover').files[0];
-  const rows=[['GAME',WSEL.game?GAMES[WSEL.game].label:'— SELECT A GAME —'],['COVER IMAGE',cover?cover.name:'NOT ADDED'],['STRUCTURE',st],['SERIES FORMAT',WSEL.series],
+  const rows=[['TOURNAMENT', $('#wName').value.trim()||'Not named'],['GAME',WSEL.game?GAMES[WSEL.game].label:'— SELECT A GAME —'],['COVER IMAGE',cover?cover.name:'NOT ADDED'],['STRUCTURE',st],['SERIES FORMAT',WSEL.series],
     ['MAP POOL',maps+' MAPS'],['ANTI-CHEAT',$('#wAc').classList.contains('act')?'REQUIRED':'OPTIONAL'],
-    ['START',d],['SLOTS',$('#wMax').value+' TEAMS · '+$('#wRoster').value],['SUBSTITUTES',$('#wSubs').value+' PER TEAM'],
-    ['PRIZE POOL',fmt(+$('#wPrize').value||0)+' TND'],['PRIZE SHARE',$('#wFirstShare').value+'% / '+$('#wSecondShare').value+'%'],
+    ['REGISTRATION OPENS',registrationOpens],['REGISTRATION CLOSES',registrationCloses],['TOURNAMENT START',d],['SLOTS',$('#wMax').value+' TEAMS · '+$('#wRoster').value],['SUBSTITUTES',$('#wSubs').value+' PER TEAM'],
+    ['RULES',$('#wRules').value.trim()?`${$('#wRules').value.trim().length} CHARACTERS`:'NOT ADDED'],['PRIZE POOL',fmt(+$('#wPrize').value||0)+' TND'],['PRIZE SHARE',$('#wFirstShare').value+'% / '+$('#wSecondShare').value+'%'],
     ['REGION',$('#wRegion').value],['CHECK-IN',$('#wCheck').value]];
-  $('#wSum').innerHTML=rows.map(r=>`<div class="srow"><span>${r[0]}</span><b>${r[1]}</b></div>`).join('');}
-$('#wNext').onclick=()=>wI===4?wPublish():wGo(wI+1);
+  $('#wSum').innerHTML=rows.map(r=>`<div class="srow"><span>${esc(r[0])}</span><b>${esc(r[1])}</b></div>`).join('');}
+function stepError(){
+  if(wI===0){if(!$('#wName').value.trim())return {field:$('#wName'),message:'Add a tournament name to continue.'};if(!WSEL.game)return {field:$('#wGames .gtile'),message:'Choose a game to continue.'};}
+  if(wI===2){const max=Number($('#wMax').value),start=$('#wDate').value,opens=$('#wRegistrationOpens').value,closes=$('#wRegistrationCloses').value,now=Date.now();if(!Number.isInteger(max)||max<2||max>512)return {field:$('#wMax'),message:'Choose a limit from 2 to 512 teams.'};if(!start||new Date(start).getTime()<=now)return {field:$('#wDate'),message:'Choose a tournament start time in the future.'};if(!opens)return {field:$('#wRegistrationOpens'),message:'Choose when team registration opens.'};if(!closes)return {field:$('#wRegistrationCloses'),message:'Choose when team registration closes.'};if(new Date(closes)<=new Date(opens))return {field:$('#wRegistrationCloses'),message:'Registration must close after it opens.'};if(new Date(closes)>=new Date(start))return {field:$('#wRegistrationCloses'),message:'Registration must close before the tournament starts.'};if(new Date(closes)<=now)return {field:$('#wRegistrationCloses'),message:'Registration close time must be in the future.'};}
+  if(wI===3){const prize=Number($('#wPrize').value),share=Number($('#wFirstShare').value);if(!Number.isFinite(prize)||prize<0)return {field:$('#wPrize'),message:'The prize pool must be zero or more.'};if(!Number.isInteger(share)||share<0||share>100)return {field:$('#wFirstShare'),message:'Set the first-place share between 0 and 100.'};if($('#wRules').value.trim().length>6000)return {field:$('#wRules'),message:'Keep tournament rules under 6,000 characters.'};}
+  return null;
+}
+function validateStep(){const issue=stepError();if(!issue)return true;$('#wError').textContent=issue.message;issue.field?.focus();issue.field?.scrollIntoView({behavior:'smooth',block:'center'});return false;}
+function validateAllSteps(){for(const index of [0,2,3]){const prior=wI;wI=index;const issue=stepError();wI=prior;if(issue){wGo(index);$('#wError').textContent=issue.message;issue.field?.focus();return false;}}return true;}
+$('#wNext').onclick=()=>{if(wI===4){wPublish();return;}if(validateStep())wGo(wI+1);};
 $('#wBack').onclick=()=>wGo(wI-1);
 
 $('#wCover').addEventListener('change',()=>{
@@ -79,11 +93,12 @@ $('#wCover').addEventListener('change',()=>{
 });
 
 async function wPublish(){
+  if(!validateAllSteps())return;
   if(!WSEL.game){toast('err','Game required','Pick the game in step 1 before publishing.');wGo(0);return;}
   const name=$('#wName').value.trim();
   if(!name){toast('err','Name required','Give your tournament a name in step 1.');$('#wName').focus();wGo(0);return;}
   const day=$('#wDate').value;
-  const startsAt=day?new Date(`${day}T18:00:00`).toISOString():null;
+  const startsAt=day?new Date(day).toISOString():null;
   if(startsAt&&new Date(startsAt)<=new Date()){
     toast('err','Choose a future date','Tournament start dates must be in the future.');wGo(2);$('#wDate').focus();return;
   }
@@ -100,10 +115,10 @@ async function wPublish(){
   let result;
   try{
     result=await SUPA.client.rpc('create_tournament',{p_data:{
-      name,game:WSEL.game,description:$('#wDescription').value.trim(),format,best_of:WSEL.series,
+      name,game:WSEL.game,description:$('#wDescription').value.trim(),rules:$('#wRules').value.trim(),format,best_of:WSEL.series,
       organization_id:$('#wOrganization').value||null,
       region:$('#wRegion').value,starts_at:startsAt,
-      registration_opens_at:new Date().toISOString(),registration_closes_at:startsAt,
+      registration_opens_at:new Date($('#wRegistrationOpens').value).toISOString(),registration_closes_at:new Date($('#wRegistrationCloses').value).toISOString(),
       max_teams:+$('#wMax').value||64,roster_size:parseInt($('#wRoster').value,10)||5,
       substitute_limit:+$('#wSubs').value||0,check_in_minutes:+($('#wCheck').value.match(/\d+/)||[])[0]||60,
       map_pool:$$('#wMaps button.act').map(button=>button.dataset.m),

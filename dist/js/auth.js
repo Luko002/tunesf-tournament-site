@@ -1,5 +1,11 @@
 /* TUNESF account access — every account uses Supabase Auth. */
 Auth.ready.then(()=>{
+if(DEMO_MODE){
+  const banner=document.createElement('p');banner.className='demo-auth-note';banner.textContent='Demo mode is active. Sign in and account creation need the federation service.';
+  document.querySelector('.auth-card')?.prepend(banner);
+  $$('#authTabs button,#inForm button[type="submit"],#upForm button[type="submit"],#recoverForm button[type="submit"],#resetForm button[type="submit"]').forEach(button=>{button.disabled=true;button.setAttribute('aria-describedby','demoAuthNote');});
+  banner.id='demoAuthNote';return;
+}
 const q=new URLSearchParams(location.search);
 const need=q.get('need');
 const safeNext=value=>{
@@ -62,7 +68,7 @@ $('#upForm').onsubmit=async event=>{
   event.preventDefault();
   const username=$('#suUser').value.trim(), discordUsername=$('#suDiscord').value.trim(), email=$('#suMail').value.trim(), password=$('#suPass').value;
   if(username.length<3){toast('err','Username too short','Use at least 3 characters.');$('#suUser').focus();return;}
-  if(discordUsername.length<2||discordUsername.length>64){toast('err','Discord username required','Enter your Discord username (2–64 characters).');$('#suDiscord').focus();return;}
+  if(discordUsername&& (discordUsername.length<2||discordUsername.length>64)){toast('err','Discord username invalid','Leave it blank or enter 2–64 characters.');$('#suDiscord').focus();return;}
   if(!email||!email.includes('@')){toast('err','Email required','Enter a valid email address.');$('#suMail').focus();return;}
   if(password.length<12){toast('err','Password too short','Use at least 12 characters for your account password.');$('#suPass').focus();return;}
   const submitButton=$('#suBtn');submitButton.disabled=true;
@@ -74,11 +80,11 @@ $('#upForm').onsubmit=async event=>{
   try{
     if(await usernameTaken()){toast('err','Username already in use','Choose a different public username.');$('#suUser').focus();return;}
     const {data,error}=await SUPA.client.auth.signUp({email,password,options:{
-      data:{username,player_name:username,discord_username:discordUsername,game:'Not selected'},
+      data:{username,player_name:username,discord_username:discordUsername||null,game:'Not selected'},
       emailRedirectTo:new URL(redirectAfterAuth(),location.href).href
     }});
     if(error)throw error;
-    if(data.session)await Auth._loadSupaUser(data.session);
+    if(data.session)await Auth._loadUser(data.session);
     if(data.session){
       toast('ok','Account created','Your account is ready. You have the PLAYER role.');
       setTimeout(()=>location.replace(redirectAfterAuth()),350);

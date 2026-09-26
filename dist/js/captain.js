@@ -19,6 +19,7 @@ Auth.ready.then(async()=>{
           <label><span>Short tag</span><input name="tag" minlength="2" maxlength="8" required placeholder="e.g. TNS"></label>
           <label><span>Game</span><select name="game" required><option value="">Choose a game</option><option value="cs2">Counter-Strike 2</option><option value="val">VALORANT</option><option value="lol">League of Legends</option><option value="rl">Rocket League</option><option value="mlbb">Mobile Legends: Bang Bang</option><option value="eafc">EA SPORTS FC</option><option value="efootball">eFootball</option></select></label>
           <label><span>Region</span><input name="region" maxlength="100" placeholder="e.g. Tunis"></label>
+          <label><span>Team logo (optional, JPG/PNG/WebP up to 5 MB)</span><input name="logo" type="file" accept="image/jpeg,image/png,image/webp"></label>
           <button class="btn btn-gold btn-sm" type="submit"><i data-lucide="plus"></i>Create team</button>
         </form>`:`<p class="team-empty">Your account does not have a PLAYER account role. Ask a federation administrator to review your account.</p>`}
       </div></details>
@@ -49,7 +50,7 @@ Auth.ready.then(async()=>{
     if(organizationTeams.error)throw organizationTeams.error;
     const ids=[...new Set([...(membershipRows||[]).map(row=>row.team_id),...(organizationTeams.data||[]).map(row=>row.id)])];
     if(!ids.length){teams=[];cards.innerHTML='<div class="team-empty">You do not captain a team yet. Create one above to get started.</div>';return;}
-    const {data,error}=await SUPA.client.from('teams').select('id,name,tag,game,region,created_at').in('id',ids).order('created_at',{ascending:false});
+    const {data,error}=await SUPA.client.from('teams').select('id,name,tag,game,region,created_at,logo_path').in('id',ids).order('created_at',{ascending:false});
     if(error)throw error;
     teams=data||[];
     if(!teams.length){cards.innerHTML='<div class="team-empty">No team records are available for this account.</div>';return;}
@@ -87,9 +88,9 @@ Auth.ready.then(async()=>{
       return {team,roster:rosterResult.data||[],rosterError:rosterResult.error,invites:invitesResult.data||[],invitesError:invitesResult.error,games:gamesResult.data||[],gamesError:gamesResult.error,gameRoster:gameRosterResult.data||[],gameRosterError:gameRosterResult.error,inbox:inboxResult.data||[],inboxError:inboxResult.error};
     }));
     const memberIds=[...new Set(results.flatMap(({roster})=>roster.map(row=>row.user_id)))];
-    const {data:profiles,error:profileError}=memberIds.length?await SUPA.client.from('public_profiles').select('id,discord_username').in('id',memberIds):{data:[],error:null};
+    const {data:profiles,error:profileError}=memberIds.length?await SUPA.client.from('public_profiles').select('id,discord_username,avatar_path').in('id',memberIds):{data:[],error:null};
     if(profileError)throw profileError;
-    const discordById=new Map((profiles||[]).map(profile=>[profile.id,profile.discord_username]));
+    const profileById=new Map((profiles||[]).map(profile=>[profile.id,profile]));
     if(!teams.some(team=>team.id===selectedTeamId))selectedTeamId=teams[0].id;
     const tabs=[['overview','Overview'],['players','Players'],['games','Game rosters'],['matches','Matches'],['inbox','Inbox'],['invitations','Invitations']];
     cards.innerHTML=`<label class="team-picker">Manage team<select id="captainTeamSelect" aria-label="Choose a team">${teams.map(team=>`<option value="${esc(team.id)}"${team.id===selectedTeamId?' selected':''}>${esc(team.name)} (${esc(team.tag)})</option>`).join('')}</select></label>`+results.map(({team,roster,rosterError,invites,invitesError,games,gamesError,gameRoster,gameRosterError,inbox,inboxError})=>{
@@ -100,7 +101,8 @@ Auth.ready.then(async()=>{
         const self=row.user_id===Auth.user.id;
         const memberRole=row.member_role||'player';
         const controls=memberRole==='captain'?'<i data-lucide="crown" aria-label="Team captain"></i>':`<div class="team-member-actions"><select aria-label="Roster role" data-member-role="${esc(row.user_id)}"><option value="player"${memberRole==='player'?' selected':''}>Player</option><option value="substitute"${memberRole==='substitute'?' selected':''}>Substitute</option></select><button class="btn btn-line btn-sm" type="button" data-change-member="${esc(row.user_id)}" data-team="${esc(team.id)}">Save</button><button class="btn btn-line btn-sm" type="button" data-remove-member="${esc(row.user_id)}" data-team="${esc(team.id)}">Remove</button></div>`;
-        return `<li><span><b>${esc(label)}${self?' · You':''}</b><small>${esc(memberRole)}${discordById.get(row.user_id)?` · Discord @${esc(discordById.get(row.user_id))}`:''}${row.joined_at?' · Joined '+esc(fmtDate(row.joined_at)):''}</small></span>${controls}</li>`;
+        const profile=profileById.get(row.user_id);
+        return `<li>${identityImage(profile?.avatar_path,label,32,'player')}<span><b>${esc(label)}${self?' · You':''}</b><small>${esc(memberRole)}${profile?.discord_username?` · Discord @${esc(profile.discord_username)}`:''}${row.joined_at?' · Joined '+esc(fmtDate(row.joined_at)):''}</small></span>${controls}</li>`;
       }).join('')}</ul>`:'<p class="team-empty">No active roster members yet.</p>';
       const teamEvents=(registrations||[]).filter(row=>row.team_id===team.id);
       const eventHtml=teamEvents.length?teamEvents.map(reg=>{
@@ -134,8 +136,9 @@ Auth.ready.then(async()=>{
       const inboxHtml=inboxError?'<p class="team-empty">Could not load captain messages.</p>':inbox.length?`<div class="captain-inbox-list">${inbox.map(item=>`<article class="captain-inbox-item"><small>${item.item_type==='join_request'?'Join request':'Message'} · ${esc(item.username||'Player')} · ${esc(fmtDate(item.created_at))}${item.game?' · '+esc(gameName[item.game]||item.game):''}</small><p>${esc(item.message)}</p>${item.item_type==='join_request'&&item.status==='pending'?`<button class="btn btn-gold btn-sm" type="button" data-review-request="${esc(item.item_id)}" data-status="accepted">Accept</button><button class="btn btn-line btn-sm" type="button" data-review-request="${esc(item.item_id)}" data-status="declined">Decline</button>`:''}${item.item_type==='message'&&!item.read_at?`<button class="btn btn-line btn-sm" type="button" data-read-message="${esc(item.item_id)}">Mark read</button>`:''}</article>`).join('')}</div>`:'<p class="team-empty">No messages or join requests yet.</p>';
       const attention=inbox.filter(item=>item.item_type==='join_request'&&item.status==='pending'||item.item_type==='message'&&!item.read_at).length;
       return `<article class="dcard team-card" data-team-card="${esc(team.id)}"${team.id!==selectedTeamId?' hidden':''}>
-        <div class="dh"><i data-lucide="shield"></i>${esc(team.name)}<span class="mono-r">${esc(team.tag)}</span></div>
+        <div class="dh">${identityImage(team.logo_path,team.name,36,'team')}${esc(team.name)}<span class="mono-r">${esc(team.tag)}</span></div>
         <div class="db"><div class="team-meta"><span>${esc(gameName[team.game]||team.game)}</span><span>${esc(team.region||'Region not set')}</span></div>
+          <div class="profile-image-editor">${identityImage(team.logo_path,team.name,64,'team')}<label><span>Team logo (JPG/PNG/WebP, up to 5 MB)</span><input type="file" accept="image/jpeg,image/png,image/webp" data-team-logo-input="${esc(team.id)}"></label><button class="btn btn-line btn-sm" type="button" data-remove-team-logo="${esc(team.id)}"${team.logo_path?'':' hidden'}>Remove logo</button><a class="btn btn-line btn-sm" href="team.html?id=${encodeURIComponent(team.id)}">Public team profile</a></div>
           <nav class="workspace-tabs" aria-label="Team sections">${tabs.map(([key,label])=>`<button type="button" data-workspace-tab="${key}" aria-pressed="${key===selectedTab}" class="${key===selectedTab?'active':''}">${label}${key==='inbox'&&attention?` <span>${attention}</span>`:''}</button>`).join('')}</nav>
           <section data-workspace-panel="overview"${selectedTab!=='overview'?' hidden':''}><div class="team-snapshot"><div><b>${active.length}</b><small>Active members</small></div><div><b>1</b><small>Game roster</small></div><div><b>${teamEvents.length}</b><small>Tournaments</small></div><div><b>${attention}</b><small>Need attention</small></div></div><p class="team-empty">This team represents ${esc(gameName[team.game]||team.game)}. Its captain can manage this game's roster, matches, and messages. Organization owners can assign the captain and create other game teams.</p></section>
           <section data-workspace-panel="players"${selectedTab!=='players'?' hidden':''}><h3 class="team-section-title">Active players <span>${active.length}</span></h3>${rosterHtml}</section>
@@ -157,10 +160,17 @@ Auth.ready.then(async()=>{
 
   const createForm=$('#teamCreateForm');
   panel.addEventListener('change',event=>{
-    if(event.target.id!=='captainTeamSelect')return;
-    selectedTeamId=event.target.value;
-    cards.querySelectorAll('[data-team-card]').forEach(card=>card.hidden=card.dataset.teamCard!==selectedTeamId);
-    cards.querySelector(`[data-team-card="${CSS.escape(selectedTeamId)}"] [data-workspace-tab="${selectedTab}"]`)?.click();
+    const logoInput=event.target.closest('[data-team-logo-input]');
+    if(logoInput){void (async()=>{const file=logoInput.files?.[0];if(!file)return;logoInput.disabled=true;try{const team=teams.find(row=>row.id===logoInput.dataset.teamLogoInput);const path=await uploadPublicImage(file,`teams/${team.id}`);const {error}=await SUPA.client.rpc('set_team_logo_path',{p_team_id:team.id,p_logo_path:path});if(error){await removePublicImage(path);throw error;}await removePublicImage(team.logo_path);toast('ok','Team logo saved','It now appears on the team profile, standings, and event pages.');await loadTeams();}catch(error){showError('Could not save team logo',error);}finally{logoInput.disabled=false;logoInput.value='';}})();return;}
+    if(event.target.id==='captainTeamSelect'){
+      selectedTeamId=event.target.value;
+      cards.querySelectorAll('[data-team-card]').forEach(card=>card.hidden=card.dataset.teamCard!==selectedTeamId);
+      cards.querySelector(`[data-team-card="${CSS.escape(selectedTeamId)}"] [data-workspace-tab="${selectedTab}"]`)?.click();
+    }
+  });
+  panel.addEventListener('click',event=>{
+    const button=event.target.closest('[data-remove-team-logo]');if(!button)return;
+    void (async()=>{button.disabled=true;try{const team=teams.find(row=>row.id===button.dataset.removeTeamLogo);const {error}=await SUPA.client.rpc('set_team_logo_path',{p_team_id:team.id,p_logo_path:null});if(error)throw error;await removePublicImage(team.logo_path);toast('ok','Team logo removed','The team initials will be shown instead.');await loadTeams();}catch(error){showError('Could not remove team logo',error);}finally{button.disabled=false;}})();
   });
   createForm?.addEventListener('submit',async event=>{
     event.preventDefault();
@@ -168,11 +178,13 @@ Auth.ready.then(async()=>{
     button.disabled=true;
     const values=Object.fromEntries(new FormData(createForm));
     try{
-      const {data,error}=await SUPA.client.rpc('create_team',{
+      const {data:teamId,error}=await SUPA.client.rpc('create_team',{
         p_name:String(values.name).trim(),p_tag:String(values.tag).trim().toUpperCase(),
         p_game:values.game,p_region:String(values.region||'').trim()
       });
       if(error)throw error;
+      const logo=values.logo;
+      if(logo?.size){try{const path=await uploadPublicImage(logo,`teams/${teamId}`);const {error:logoError}=await SUPA.client.rpc('set_team_logo_path',{p_team_id:teamId,p_logo_path:path});if(logoError){await removePublicImage(path);throw logoError;}}catch(logoError){toast('info','Team created, logo not saved',logoError.message||'You can add the logo later from Team management.');}}
       createForm.reset();
       toast('ok','Team created','You are now captain of this team.');
       try{await loadTeams();}catch(refreshError){showError('Team created, but the workspace did not refresh',refreshError);}
@@ -343,6 +355,7 @@ Auth.ready.then(async()=>{
   });
 
   panel.addEventListener('change',async event=>{
+    if(event.target.closest('[data-team-logo-input]'))return;
     const input=event.target.closest('[data-game-member]');if(!input)return;
     input.disabled=true;
     try{
