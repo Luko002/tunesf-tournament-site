@@ -1,1 +1,6 @@
-/tunesf-static.tar.gz
+node_modules/
+*.log
+
+.vercel
+/.pnpm-store/
+/tunesf-tournament-site-main/dist/

@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Roles &amp; Permissions — TUNESF</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=Barlow:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/style.css?v=20260926c">
+<link rel="stylesheet" href="/css/pages.css?v=20260926e">
+</head>
+<body>
+
+<header class="top" id="topbar">
+  <div class="wrap navbar">
+    <a class="logo" href="index.html"><span class="js-logo"></span><span><b>TUNESF</b><small>ESPORTS FEDERATION</small></span></a>
+    <nav class="nav-links" id="navLinks"></nav>
+    <div class="nav-cta" id="navCta"></div>
+  </div>
+</header>
+
+<main>
+<section class="page-hero"><div class="wrap">
+  <div class="crumbs"><a href="index.html">TUNESF</a><span>/</span><b>Roles &amp; Permissions</b></div>
+  <div class="eyebrow">Governance · role-based access</div>
+  <h1 class="ph-title">Role <span class="out2">Architecture</span></h1>
+  <p class="lead">The federation assigns base permissions by role and grants team, organization, and tournament capabilities within their scope. These roles and permissions are loaded from the live TUNESF database.</p>
+</div></section>
+
+<!-- ================= HIERARCHY ================= -->
+<section class="sec tight"><div class="wrap">
+  <div class="sec-head rv">
+    <div><div class="eyebrow">The Hierarchy</div><h2>Who sits <span class="out">Where</span></h2></div>
+    <p class="sec-note">Authority flows from the federation board down to the visitor. Higher roles inherit the capabilities of the tiers beneath them.</p>
+  </div>
+  <div class="rv">
+    <div class="tree">
+      <div class="trow"><div class="tnode"><span class="rolechip r-super">SUPER ADMIN</span><small>LEVEL 8</small></div></div>
+      <div class="tline"></div>
+      <div class="trow">
+        <div class="tnode"><span class="rolechip r-padmin">PLATFORM ADMIN</span><small>L7</small></div>
+        <div class="tnode"><span class="rolechip r-org">ORGANIZATION / CLUB</span><small>L6</small></div>
+      </div>
+      <div class="tline"></div>
+      <div class="trow">
+        <div class="tnode"><span class="rolechip r-tadmin">TOURNAMENT ADMIN</span><small>L5</small></div>
+        <div class="tnode"><span class="rolechip r-moderator">MODERATION STAFF</span><small>L4</small></div>
+      </div>
+      <div class="tline"></div>
+      <div class="trow">
+        <div class="tnode"><span class="rolechip r-referee">REFEREE</span><small>L3</small></div>
+        <div class="tnode"><span class="rolechip r-captain">CAPTAIN</span><small>L2</small></div>
+        <div class="tnode"><span class="rolechip r-player">PLAYER</span><small>L1</small></div>
+      </div>
+      <div class="tline"></div>
+      <div class="trow"><div class="tnode"><span class="rolechip r-visitor">VISITOR</span><small>L0</small></div></div>
+    </div>
+  </div>
+</div></section>
+
+<!-- ================= ROLE CARDS ================= -->
+<section class="sec tight" style="padding-top:24px"><div class="wrap">
+  <div class="sec-head rv">
+    <div><div class="eyebrow">Federation roles</div><h2>Base <span class="out">Permissions</span></h2></div>
+    <p class="sec-note">Base permissions come from the database. Scoped access is checked separately for each team, organization, and tournament.</p>
+  </div>
+  <div class="rolecards rv" id="roleCards"></div>
+</div></section>
+
+<!-- ================= PERMISSION MATRIX ================= -->
+<section class="sec tight" style="padding-top:0"><div class="wrap">
+  <div class="sec-head rv">
+    <div><div class="eyebrow">Permission Matrix</div><h2>Who can do <span class="out">What</span></h2></div>
+    <p class="sec-note">The enforcement table behind every console. ✅ = allowed by role. The platform checks this matrix on every action — never on the honor system.</p>
+  </div>
+  <div class="role-matrix-wrap rv"><div class="role-mobile"><label for="roleCompare">Show permissions for</label><select id="roleCompare" aria-controls="rolePermissionList"></select><ul class="mtx-mobile-list" id="rolePermissionList" aria-live="polite"></ul></div><div class="tablewrap"><table class="mtx">
+    <thead><tr>
+      <th>Action</th><th class="c">Player</th><th class="c">Captain</th><th class="c">Referee</th><th class="c">Moderator</th>
+      <th class="c">Tourn. Admin</th><th class="c">Org Owner</th><th class="c">Platform Admin</th><th class="c">Super Admin</th>
+    </tr></thead>
+    <tbody>
+      <tr><td>View tournaments, standings, brackets</td><td class="c hl-col"><span class="y">✅</span></td><td class="c"><span class="y">✅</span></td><td class="c"><span class="y">✅</span></td><td class="c"><span class="y">✅</span></td><td class="c"><span class="y">✅</span></td><td class="c"><span class="y">✅</span></td><td class="c"><span class="y">✅</span></td><td class="c"><span class="y">✅</span></td></tr>
+      <tr><td>Create team</td><td class="c"><span class="y">✅</span></td><td class="c hl-col"><span class="y">✅</span></td><td class="c"><span class="n">—</span></td><td class="c"><span class="n">—</span></td><td class="c"><span class="n">—</span></td><td class="c"><span class="y">✅</span></td><td class="c"><span class="y">✅</span></td><td class="c"><span class="y">✅</span></td></tr>
+      <tr><td>Invite / remove players, lock roster</td><td class="c"><span class="n">—</span></td><td class="c hl-col"><span class="y">✅</span></td><td class="c"><span class="n">—</span></td><td class="c"><span class="n">—</span></td><td class="c"><span class="n">—</span></td><td class="c"><span class="y">✅</span></td><td class="c"><span class="y">✅</span></td><td class="c"><span class="y">✅</span></td></tr>
+      <tr><td>Register team in tournament</td><td class="c"><span class="n">—</span></td><td class="c hl-col"><span class="y">✅</span></td><td class="c"><span class="n">—</span></td><td class="c"><span class="n">—</span></td><td class="c"><span class="y">✅</span></td><td class="c"><span class="y">✅</span></td><td class="c"><span class="y">✅</span></td><td class="c"><span class="y">✅</span></td></tr>
+      <tr><td>Team check-in &amp; confirm roster</td><td class="c"><span class="n">—</span></td><td class="c hl-col"><span class="y">✅</span></td><td class="c"><span class="y">✅</span></td><td class="c"><span class="n">—</span></td><td class="c"><span class="y">✅</span></td><td class="c"><span class="n">—</span></td><td class="c"><span class="y">✅</span></td><td class="c"><span class="y">✅</span></td></tr>
+      <tr><td>Submit result &amp; evidence</td><td class="c"><span class="n">—</span></td><td class="c hl-col"><span class="y">✅</span></td><td class="c"><span class="n">—</span></td><td class="c"><span class="n">—</span></td><td class="c"><span class="n">—</span></td><td class="c"><span class="n">—</span></td><td class="c"><span class="y">✅</span></td><td class="c"><span class="y">✅</span></td></tr>
+      <tr><td>Start / pause / resume match</td><td class="c"><span class="n">—</span></td><td class="c"><span class="n">—</span></td><td class="c hl-col"><span class="y">✅</span></td><td class="c"><span class="n">—</span></td><td class="c"><span class="y">✅</span></td><td class="c"><span class="n">—</span></td><td class="c"><span class="y">✅</span></td><td class="c"><span class="y">✅</span></td></tr>
+      <tr><td>Approve / reject result</td><td class="c"><span class="n">—</span></td><td class="c"><span class="n">—</span></td><td class="c hl-col"><span class="y">✅</span></td><td class="c"><span class="n">—</span></td><td class="c"><span class="y">✅</span></td><td class="c"><span class="n">—</span></td><td class="c"><span class="y">✅</span></td><td class="c"><span class="y">✅</span></td></tr>
+      <tr><td>File incident report</td><td class="c"><span class="n">—</span></td><td class="c"><span class="n">—</span></td><td class="c hl-col"><span class="y">✅</span></td><td class="c"><span class="n">—</span></td><td class="c"><span class="y">✅</span></td><td class="c"><span class="n">—</span></td><td class="c"><span class="y">✅</span></td><td class="c"><span class="y">✅</span></td></tr>
+      <tr><td>Generate, seed &amp; correct bracket</td><td class="c"><span class="n">—</span></td><td class="c"><span class="n">—</span></td><td class="c"><span class="n">—</span></td><td class="c"><span class="n">—</span></td><td class="c hl-col"><span class="y">✅</span></td><td class="c"><span class="n">—</span></td><td class="c"><span class="y">✅</span></td><td class="c"><span class="y">✅</span></td></tr>
+      <tr><td>Create &amp; publish tournament</td><td class="c"><span class="n">—</span></td><td class="c"><span class="n">—</span></td><td class="c"><span class="n">—</span></td><td class="c"><span class="n">—</span></td><td class="c hl-col"><span class="y">✅</span></td><td class="c"><span class="n">—</span></td><td class="c"><span class="y">✅</span></td><td class="c"><span class="y">✅</span></td></tr>
+      <tr><td>Assign referees</td><td class="c"><span class="n">—</span></td><td class="c"><span class="n">—</span></td><td class="c"><span class="n">—</span></td><td class="c"><span class="n">—</span></td><td class="c hl-col"><span class="y">✅</span></td><td class="c"><span class="n">—</span></td><td class="c"><span class="y">✅</span></td><td class="c"><span class="y">✅</span></td></tr>
+      <tr><td>Rule on disputes (replay / penalty)</td><td class="c"><span class="n">—</span></td><td class="c"><span class="n">—</span></td><td class="c"><span class="y">✅</span> escalate</td><td class="c"><span class="n">—</span></td><td class="c hl-col"><span class="y">✅</span></td><td class="c"><span class="n">—</span></td><td class="c"><span class="y">✅</span></td><td class="c"><span class="y">✅</span></td></tr>
+      <tr><td>Manage organization, staff, sponsors</td><td class="c"><span class="n">—</span></td><td class="c"><span class="n">—</span></td><td class="c"><span class="n">—</span></td><td class="c"><span class="n">—</span></td><td class="c"><span class="n">—</span></td><td class="c hl-col"><span class="y">✅</span></td><td class="c"><span class="y">✅</span></td><td class="c"><span class="y">✅</span></td></tr>
+      <tr><td>Review reports, remove content, warn</td><td class="c"><span class="n">—</span></td><td class="c"><span class="n">—</span></td><td class="c"><span class="n">—</span></td><td class="c hl-col"><span class="y">✅</span></td><td class="c"><span class="n">—</span></td><td class="c"><span class="n">—</span></td><td class="c"><span class="y">✅</span></td><td class="c"><span class="y">✅</span></td></tr>
+      <tr><td>Ban / suspend users &amp; teams</td><td class="c"><span class="n">—</span></td><td class="c"><span class="n">—</span></td><td class="c"><span class="n">—</span></td><td class="c"><span class="n">—</span></td><td class="c"><span class="n">—</span></td><td class="c"><span class="n">—</span></td><td class="c hl-col"><span class="y">✅</span></td><td class="c"><span class="y">✅</span></td></tr>
+      <tr><td>Approve prize award records (payments not configured)</td><td class="c"><span class="n">—</span></td><td class="c"><span class="n">—</span></td><td class="c"><span class="n">—</span></td><td class="c"><span class="n">—</span></td><td class="c"><span class="n">—</span></td><td class="c"><span class="n">—</span></td><td class="c hl-col"><span class="y">✅</span></td><td class="c"><span class="y">✅</span></td></tr>
+      <tr><td>Grant roles &amp; permissions</td><td class="c"><span class="n">—</span></td><td class="c"><span class="n">—</span></td><td class="c"><span class="n">—</span></td><td class="c"><span class="n">—</span></td><td class="c"><span class="n">—</span></td><td class="c"><span class="n">—</span></td><td class="c"><span class="n">—</span></td><td class="c hl-col"><span class="y">✅</span></td></tr>
+      <tr><td>Platform settings &amp; integrations (not configured)</td><td class="c"><span class="n">—</span></td><td class="c"><span class="n">—</span></td><td class="c"><span class="n">—</span></td><td class="c"><span class="n">—</span></td><td class="c"><span class="n">—</span></td><td class="c"><span class="n">—</span></td><td class="c"><span class="n">—</span></td><td class="c"><span class="n">—</span></td></tr>
+    </tbody>
+  </table></div></div>
+</div></section>
+
+<!-- ================= RBAC NOTE ================= -->
+<section class="sec tight" style="padding-top:0"><div class="wrap dgrid2 rv" style="gap:16px">
+  <div class="dcard"><div class="dh"><i data-lucide="database"></i>Roles in the database</div>
+    <div class="db">
+      <p style="color:var(--dim);font-size:13.5px;margin-bottom:14px">The <b class="mono" style="color:var(--gold)">users</b> table never hardcodes permissions. Each account holds one or more role keys, resolved through the RBAC layer on every request:</p>
+      <div class="codebox">users.roles →  <b>VISITOR</b> | <b>PLAYER</b> | <b>CAPTAIN</b> | <b>REFEREE</b><br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;| <b>TOURNAMENT_ADMIN</b> | <b>ORGANIZATION_OWNER</b><br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;| <b>MODERATOR</b> | <b>PLATFORM_ADMIN</b> | <b>SUPER_ADMIN</b></div>
+    </div>
+  </div>
+  <div class="dcard"><div class="dh"><i data-lucide="shield-check"></i>Why RBAC — not hardcoded checks</div>
+    <div class="db">
+      <ul class="rc-list" style="border-top:none;padding-top:0">
+        <li><i data-lucide="check"></i>Permissions are granted per role, so adding a role never means rewriting the platform.</li>
+        <li><i data-lucide="check"></i>One account can hold several roles — a captain can also be a referee for a lower division.</li>
+        <li><i data-lucide="check"></i>Separation of duties keeps competitive integrity: the referee who validates a result is never on either roster.</li>
+        <li><i data-lucide="check"></i>Every privileged action is written to the audit log, reviewed by platform admins.</li>
+      </ul>
+      <a class="btn btn-gold btn-sm" href="login.html" style="margin-top:18px"><i data-lucide="log-in"></i>Sign in to continue</a>
+    </div>
+  </div>
+</div></section>
+</main>
+
+<footer><div class="wrap">
+  <div class="f-grid">
+    <div class="f-brand">
+      <a class="logo" href="index.html"><span class="js-logo-s"></span><span><b>TUNESF</b><small>ESPORTS FEDERATION</small></span></a>
+      <p>The national governing body for competitive gaming. Players compete, teams build their legacy, tournaments become legendary events.</p>
+    </div>
+    <div class="f-col"><b>Compete</b><a href="tournaments.html">Tournaments</a><a href="standings.html">Rankings</a><a href="bracket.html">Match center</a><a href="dashboard.html">Player dashboard</a></div>
+    <div class="f-col"><b>Organize</b><a href="organize.html">Host an event</a><a href="referee.html">Referee program</a><a href="organization.html">Clubs &amp; organizations</a><a href="roles.html">Federal rulebook</a></div>
+    <div class="f-col"><b>Governance</b><a href="roles.html">Roles &amp; permissions</a><a href="moderation.html">Moderation</a><a href="admin.html">Admin console</a><a href="login.html">Sign in</a></div>
+  </div>
+  <div class="f-bot"><span>© 2026 TUNESF — TUNISIAN ESPORTS FEDERATION</span><span>FAIR PLAY · VERIFIED ROSTERS · FEDERAL REFEREES</span></div>
+</div></footer>
+
+<script src="https://unpkg.com/lucide@1.47.0/dist/umd/lucide.min.js" integrity="sha384-v15JX+vZHMR3T6LQR9N6e6wIKrKOdNTbdj8j+e5irqq3L9gCauJz2vGlUzomWyUp" crossorigin="anonymous"></script>
+<script>if(!window.lucide){document.write('<script src="https://cdn.jsdelivr.net/npm/lucide@1.47.0/dist/umd/lucide.min.js" integrity="sha384-v15JX+vZHMR3T6LQR9N6e6wIKrKOdNTbdj8j+e5irqq3L9gCauJz2vGlUzomWyUp" crossorigin="anonymous"><\/script>')}</script>
+<script src="/js/supabase-config.js?v=3"></script>
+<script src="/js/core.js?v=20260926g"></script>
+<script src="/js/roles.js?v=20260926a"></script>
+</body>
+</html>
