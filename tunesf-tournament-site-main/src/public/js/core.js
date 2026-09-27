@@ -192,6 +192,7 @@ function currentPage(){const page=location.pathname.split('/').filter(Boolean).p
 function buildNav(){
   $$('.js-logo').forEach(el=>{el.innerHTML=logoSvg(34);});
   $$('.js-logo-s').forEach(el=>{el.innerHTML=logoSvg(30);});
+  $$('.logo > span:not(.js-logo):not(.js-logo-s)').forEach(el=>{el.classList.add('js-wordmark');el.innerHTML='<img src="/assets/tunesf-wordmark.png" alt="Tunisian Esports Federation">';});
   const nl=$('#navLinks'),page=currentPage();
   if(nl){
     const links=[['index.html','Home'],['tournaments.html','Tournaments'],['clubs.html','Clubs'],['bracket.html','Match center']];
@@ -301,3 +302,4 @@ document.addEventListener('click',e=>{if(e.target.closest('[data-tournament-deta
 addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();});
 
 Auth.ready.then(()=>{buildNav();buildConsoleStrip();const whoName=$('#whoName');if(whoName)whoName.textContent=Auth.user?.name||'Sign in required';if(Auth.is()){ensureNotificationPanel();refreshNotifications().catch(error=>console.warn('Notifications unavailable:',error));setInterval(()=>{if(!document.hidden)refreshNotifications().catch(error=>console.warn('Notification refresh failed:',error));},30000);}icons();}).catch(e=>{console.error('Authentication initialization failed:',e);const whoName=$('#whoName');if(whoName)whoName.textContent='Account unavailable';buildNav();icons();});
+
