@@ -5,7 +5,7 @@
 <title>Teams — TUNESF</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=Barlow:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/css/style.css?v=20260927h"><link rel="stylesheet" href="/css/pages.css?v=20260927g">
+<link rel="stylesheet" href="/css/style.css?v=20260927h"><link rel="stylesheet" href="/css/pages.css?v=20260927g"><link rel="stylesheet" href="/css/teams.css?v=20260927b">
 </head>
 <body>
 <header class="top" id="topbar"><div class="wrap navbar">
@@ -19,8 +19,15 @@
     <p class="lead">Browse game teams and rosters created here by captains and federation club organizations. These squads compete in tournaments on TUNESF.</p>
   </div></section>
   <section class="sec tight"><div class="wrap">
-    <div class="club-controls"><label class="club-search"><span class="sr-only">Search teams</span><input id="clubSearch" type="search" placeholder="Search teams by name, game or region"></label><span id="clubCount" class="club-count"></span><a class="btn btn-gold btn-sm" href="captain.html">Create a team <i data-lucide="arrow-up-right"></i></a></div>
-    <div class="club-grid" id="clubGrid"><div class="team-empty">Loading clubs…</div></div>
+    <div class="team-directory-controls" id="teamDirectoryControls">
+      <label class="club-search"><span class="sr-only">Search teams</span><input id="clubSearch" type="search" placeholder="Search teams by name, tag or region"></label>
+      <label class="team-directory-filter"><span>Organization</span><select id="teamOrgFilter"><option value="">All organizations</option></select></label>
+      <label class="team-directory-filter"><span>Game</span><select id="teamGameFilter"><option value="">All games</option></select></label>
+      <button class="btn btn-line btn-sm" id="teamFilterClear" type="button">Clear filters</button>
+      <span id="clubCount" class="club-count" role="status" aria-live="polite"></span>
+      <a class="btn btn-gold btn-sm" href="captain.html">Create a team <i data-lucide="arrow-up-right"></i></a>
+    </div>
+    <div class="club-grid" id="clubGrid"><div class="team-empty">Loading teams…</div></div>
   </div></section>
 </main>
 <footer><div class="wrap"><div class="f-grid">

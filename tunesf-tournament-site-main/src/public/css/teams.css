@@ -1,0 +1,8 @@
+.team-directory-controls{display:grid;grid-template-columns:minmax(220px,1.4fr) repeat(2,minmax(145px,.75fr)) auto auto;align-items:end;gap:12px;margin-bottom:20px;padding:16px;border:1px solid var(--line);background:linear-gradient(110deg,rgba(245,180,0,.045),rgba(255,255,255,.012))}
+.team-directory-filter{display:grid;gap:6px;color:var(--faint);font:600 9px/1.4 var(--fm);letter-spacing:.1em;text-transform:uppercase}
+.team-directory-controls input,.team-directory-controls select{width:100%;min-width:0;min-height:42px;padding:9px 11px;border:1px solid var(--line2);border-radius:0;background:var(--bg2,var(--panel));color:var(--txt);font:500 12px var(--fb);letter-spacing:normal;text-transform:none}
+.team-directory-controls input::placeholder{color:var(--faint)}.team-directory-controls input:focus-visible,.team-directory-controls select:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+.team-directory-controls .club-count{align-self:center;white-space:nowrap}.team-directory-controls .btn{white-space:nowrap}
+@media(max-width:880px){.team-directory-controls{grid-template-columns:repeat(2,minmax(0,1fr))}.team-directory-controls>.club-search{grid-column:1/-1}}
+@media(max-width:560px){.team-directory-controls{grid-template-columns:1fr;padding:12px;gap:10px}.team-directory-controls>.club-search{grid-column:auto}.team-directory-controls .club-count{align-self:start}}
+
