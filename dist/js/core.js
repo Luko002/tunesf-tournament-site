@@ -190,9 +190,7 @@ const TMODAL_HTML=`<div class="overlay" id="tmodal"><div class="modal cut"><div 
 
 function currentPage(){const page=location.pathname.split('/').filter(Boolean).pop()||'index';const normalized=page.toLowerCase();return normalized.endsWith('.html')?normalized:`${normalized}.html`;}
 function buildNav(){
-  $$('.js-logo').forEach(el=>{el.innerHTML=logoSvg(34);});
-  $$('.js-logo-s').forEach(el=>{el.innerHTML=logoSvg(30);});
-  $$('.logo > span:not(.js-logo):not(.js-logo-s)').forEach(el=>{el.classList.add('js-wordmark');el.innerHTML='<img src="/assets/tunesf-wordmark.png" alt="Tunisian Esports Federation">';});
+  $$('.logo').forEach(el=>{el.innerHTML='<img class="brand-lockup" src="/assets/tunesfgold.png" alt="Tunisian Esports Federation">';});
   const nl=$('#navLinks'),page=currentPage();
   if(nl){
     const links=[['index.html','Home'],['tournaments.html','Tournaments'],['clubs.html','Clubs'],['bracket.html','Match center']];
