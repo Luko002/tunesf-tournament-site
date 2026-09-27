@@ -5,8 +5,6 @@ boot(async()=>{
     const items=TOURN.filter(t=>t.status==='reg').slice(0,3);
     grid.innerHTML=items.length?items.map(tCardHTML).join(''):'<p style="color:var(--faint);font:500 13px var(--fm);letter-spacing:.1em;padding:24px 0">No tournaments yet. Check back for the next competition.</p>';
   }
-  const roles=$('#roleChips');
-  if(roles)roles.innerHTML=ROLE_ORDER.map(role=>`<a class="rolechip ${ROLES[role].cls}" href="roles.html" style="font-size:10.5px;padding:10px 14px"><i data-lucide="${ROLES[role].icon}"></i>${ROLES[role].label}</a>`).join('');
   const cta=$('#ctaRegister');
   if(cta){cta.href=Auth.has('CREATE_TOURNAMENT')?'organize.html':'tournaments.html';cta.innerHTML=Auth.has('CREATE_TOURNAMENT')?'<i data-lucide="plus"></i>Create a tournament':'<i data-lucide="trophy"></i>Browse tournaments';}
   const meta=document.querySelector('.hero-meta');

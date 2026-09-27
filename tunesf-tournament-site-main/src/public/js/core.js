@@ -143,10 +143,6 @@ const demoMatches=[
 ];
 function renderDemoData(){
   const page=currentPage();
-  if(page==='standings.html'){
-    const target=$('#stBody');
-    if(target)target.innerHTML=`<tr><td>1</td><td>Carthage Phoenix</td><td>12</td><td>2</td><td>+24</td><td>36</td><td><span class="chip gold">QUALIFIED</span></td></tr><tr><td>2</td><td>Atlas Gaming</td><td>10</td><td>4</td><td>+18</td><td>30</td><td><span class="chip green">ACTIVE</span></td></tr><tr><td>3</td><td>Sahara Wolves</td><td>9</td><td>5</td><td>+11</td><td>27</td><td><span class="chip green">ACTIVE</span></td></tr><tr><td>4</td><td>Blue Medina</td><td>8</td><td>6</td><td>+7</td><td>24</td><td><span class="chip">ACTIVE</span></td></tr>`;
-  }
   if(page==='bracket.html'){
     const canvas=$('#bcanvas');
     if(canvas)canvas.innerHTML=`<div class="demo-bracket"><article><h3>QUARTER FINALS</h3><p>Atlas Gaming <b>2</b></p><p>Carthage Knights <b>0</b></p><p>Sahara Wolves <b>2</b></p><p>Desert Foxes <b>1</b></p></article><article><h3>SEMI FINALS</h3><p>Atlas Gaming <b>1</b></p><p>Sahara Wolves <b>2</b></p></article><article><h3>GRAND FINAL · COMPLETE</h3><p>Carthage Phoenix <b>2</b></p><p>Sahara Wolves <b>1</b></p><span class="chip gold">CHAMPIONS · CARTHAGE PHOENIX</span></article></div>`;
@@ -198,7 +194,7 @@ function buildNav(){
   $$('.js-logo-s').forEach(el=>{el.innerHTML=logoSvg(30);});
   const nl=$('#navLinks'),page=currentPage();
   if(nl){
-    const links=[['index.html','Home'],['tournaments.html','Tournaments'],['clubs.html','Clubs'],['standings.html','Standings'],['roles.html','Roles']];
+    const links=[['index.html','Home'],['tournaments.html','Tournaments'],['clubs.html','Clubs'],['bracket.html','Match center']];
     let html=links.map(([href,label])=>`<a href="${href}"${page===href?' class="act" aria-current="page"':''}>${label}</a>`).join('');
     const consoles=Auth.consoles();
     if(consoles.length===1)html+=`<a href="${consoles[0].href}">${consoles[0].label}</a>`;
