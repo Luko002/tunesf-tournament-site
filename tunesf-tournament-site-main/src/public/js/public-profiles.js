@@ -13,7 +13,7 @@ const playerAchievements=items=>`<section class="dcard profile-history"><div cla
 async function loadPublicProfile(){
   const params=new URLSearchParams(location.search),isTeam=currentPage()==='team.html',id=params.get('id');
   const host=$('#profileContent');
-  const showProfileLinkState=message=>{$('#profileSubtitle').textContent='Choose a profile from the clubs and teams directory.';host.innerHTML=`<div class="team-empty"><p>${esc(message)}</p><a class="btn btn-line btn-sm" href="clubs.html">Browse clubs &amp; teams</a></div>`;};
+  const showProfileLinkState=message=>{$('#profileSubtitle').textContent='Choose a directory to explore.';host.innerHTML=`<div class="team-empty"><p>${esc(message)}</p><a class="btn btn-line btn-sm" href="teams.html">Browse teams</a> <a class="btn btn-line btn-sm" href="clubs.html">Federation clubs</a></div>`;};
   if(!id){showProfileLinkState(`This ${isTeam?'team':'player'} link is missing its ID.`);return;}
   if(!/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(id)){showProfileLinkState(`This ${isTeam?'team':'player'} profile link is invalid or expired.`);return;}
   const profileResult=await SUPA.client.rpc(isTeam?'get_public_team_profile':'get_public_player_profile',isTeam?{p_team_id:id}:{p_user_id:id});
@@ -44,3 +44,4 @@ async function loadPublicProfile(){
   icons();
 }
 Auth.ready.then(loadPublicProfile).catch(error=>{console.error('Public profile unavailable:',error);const subtitle=$('#profileSubtitle'),host=$('#profileContent');if(subtitle)subtitle.textContent='Profile information is unavailable right now.';if(host)host.innerHTML=`<div class="team-empty">Profile information could not be loaded. ${esc(error.message||'Please try again later.')}<p><a class="btn btn-line btn-sm" href="clubs.html">Browse clubs &amp; teams</a></p></div>`;});
+

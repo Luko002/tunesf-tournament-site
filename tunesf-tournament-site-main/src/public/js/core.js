@@ -193,7 +193,7 @@ function buildNav(){
   $$('.logo').forEach(el=>{el.innerHTML='<img class="brand-lockup" src="/assets/tunesfgold.png" alt="Tunisian Esports Federation">';});
   const nl=$('#navLinks'),page=currentPage();
   if(nl){
-    const links=[['index.html','Home'],['tournaments.html','Tournaments'],['clubs.html','Clubs'],['bracket.html','Match center']];
+    const links=[['index.html','Home'],['tournaments.html','Tournaments'],['clubs.html','Clubs'],['teams.html','Teams'],['bracket.html','Match center']];
     let html=links.map(([href,label])=>`<a href="${href}"${page===href?' class="act" aria-current="page"':''}>${label}</a>`).join('');
     const consoles=Auth.consoles();
     if(consoles.length===1)html+=`<a href="${consoles[0].href}">${consoles[0].label}</a>`;
@@ -217,7 +217,7 @@ function buildNav(){
   }
   icons();
 }
-const notificationHref=n=>n.entity_type==='match'?`match-room.html?id=${encodeURIComponent(n.entity_id||'')}`:n.entity_type==='tournament'?`tournament.html?id=${encodeURIComponent(n.entity_id||'')}`:n.entity_type==='team'?'clubs.html':'dashboard.html';
+const notificationHref=n=>n.entity_type==='match'?`match-room.html?id=${encodeURIComponent(n.entity_id||'')}`:n.entity_type==='tournament'?`tournament.html?id=${encodeURIComponent(n.entity_id||'')}`:n.entity_type==='team'?'teams.html':'dashboard.html';
 function ensureNotificationPanel(){
   if($('#notificationPanel'))return;
   document.body.insertAdjacentHTML('beforeend',`<section class="notification-panel" id="notificationPanel" aria-label="Notifications" aria-live="polite" hidden><div class="notification-panel-head"><div><b>Notifications</b><small id="notificationPanelStatus">Recent account and tournament updates</small></div><button class="btn btn-line btn-sm" id="notificationMarkAll" type="button">Mark all read</button></div><div class="notification-list" id="notificationList"><p class="team-empty">Sign in to see your notifications.</p></div></section>`);
