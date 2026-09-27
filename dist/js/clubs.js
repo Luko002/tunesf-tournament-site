@@ -37,17 +37,16 @@ Auth.ready.then(async()=>{
   const allRows=(directory.data||[]).map(row=>({...row,image_url:row.club_id?logos.get(row.club_id):null}));
   const data=allRows.filter(row=>isTeamsDirectory?Boolean(row.team_id):!row.team_id);
   const teamRows=data.filter(r=>r.team_id);
-  if(isTeamsDirectory&&teamRows.length){
-    const {data:teamOrgs,error:teamOrgError}=await SUPA.client.from('teams').select('id,organization_id').in('id',teamRows.map(row=>row.team_id));
-    if(teamOrgError)throw teamOrgError;
-    const orgByTeam=new Map((teamOrgs||[]).map(row=>[row.id,row.organization_id]));
-    const orgIds=[...new Set((teamOrgs||[]).map(row=>row.organization_id).filter(Boolean))];
-    const organizations=orgIds.length?await SUPA.client.from('organizations').select('id,name').in('id',orgIds):{data:[],error:null};
+  if(isTeamsDirectory){
+    const teamOrgs=teamRows.length?await SUPA.client.from('teams').select('id,organization_id').in('id',teamRows.map(row=>row.team_id)):{data:[],error:null};
+    if(teamOrgs.error)throw teamOrgs.error;
+    const orgByTeam=new Map((teamOrgs.data||[]).map(row=>[row.id,row.organization_id]));
+    const organizations=await SUPA.client.from('organizations').select('id,name').order('name');
     if(organizations.error)throw organizations.error;
     const orgNames=new Map((organizations.data||[]).map(row=>[row.id,row.name]));
     teamRows.forEach(row=>{row.organization_id=orgByTeam.get(row.team_id)||null;row.organization_name=row.organization_id?orgNames.get(row.organization_id)||'Organization':'Independent team';});
     const orgFilter=document.querySelector('#teamOrgFilter'),gameFilter=document.querySelector('#teamGameFilter');
-    if(orgFilter){const options=new Map(teamRows.filter(row=>row.organization_id).map(row=>[row.organization_id,row.organization_name]));orgFilter.innerHTML='<option value="">All organizations</option>'+[...options].sort((a,b)=>a[1].localeCompare(b[1])).map(([id,name])=>`<option value="${esc(id)}">${esc(name)}</option>`).join('')+(teamRows.some(row=>!row.organization_id)?'<option value="independent">Independent teams</option>':'');}
+    if(orgFilter){const counts=new Map();teamRows.forEach(row=>{if(row.organization_id)counts.set(row.organization_id,(counts.get(row.organization_id)||0)+1)});const options=(organizations.data||[]).map(row=>`<option value="${esc(row.id)}">${esc(row.name)} · ${counts.get(row.id)||0} ${counts.get(row.id)===1?'team':'teams'}</option>`).join('');orgFilter.innerHTML='<option value="">All organizations</option>'+options+(teamRows.some(row=>!row.organization_id)?`<option value="independent">Independent teams · ${teamRows.filter(row=>!row.organization_id).length} teams</option>`:'');}
     if(gameFilter){const games=[...new Set(teamRows.map(row=>row.game).filter(Boolean))].sort((a,b)=>(GAME_LABELS[a]||a).localeCompare(GAME_LABELS[b]||b));gameFilter.innerHTML='<option value="">All games</option>'+games.map(value=>`<option value="${esc(value)}">${esc(GAME_LABELS[value]||value)}</option>`).join('');}
   }
   const rosterResults=await Promise.all(teamRows.map(row=>SUPA.client.rpc('list_public_team_rosters',{p_team_id:row.team_id})));
