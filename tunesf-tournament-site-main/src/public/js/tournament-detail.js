@@ -43,6 +43,7 @@ else (async()=>{
       stageIds.length?SUPA.client.from('tournament_matches').select('id,stage_id,round_number,position,bracket_side,home_registration_id,away_registration_id,winner_registration_id,home_expected,away_expected,home_score,away_score,status,scheduled_at,completed_at').in('stage_id',stageIds).order('round_number').order('position'):Promise.resolve({data:[],error:null})
     ]);
     if(teamResult.error)throw teamResult.error;if(matchResult.error)throw matchResult.error;
+    await applyOrganizationTeamLogos(teamResult.data||[]);
     const teamMap=new Map((teamResult.data||[]).map(row=>[row.id,row]));
     const regTeam=new Map([...regs,...adminRegistrations].map(row=>[row.id,row.team_id]));
     adminRegistrations=adminRegistrations.map(row=>({...row,team:teamMap.get(row.team_id)}));
@@ -643,3 +644,4 @@ else (async()=>{
     }
   }catch(error){fail(error.message||'Please try again.');}
 })();
+

@@ -73,6 +73,7 @@ boot(async()=>{
     ]);
     const teamIds=[...new Set(registrations.map(r=>r.team_id).filter(Boolean))];
     const teams=await readRelated('teams','id,name,tag,logo_path',teamIds);
+    await applyOrganizationTeamLogos(teams||[]);
     const regMap=new Map((registrations||[]).map(r=>[r.id,r.team_id])),teamMap=new Map((teams||[]).map(t=>[t.id,t])),eventMap=new Map((tournaments||[]).map(t=>[t.id,t]));
     const team=id=>teamMap.get(regMap.get(id))||{name:'Team unavailable',tag:'—'};
     const event=match=>eventMap.get(match.tournament_id);
@@ -127,3 +128,4 @@ boot(async()=>{
   setInterval(()=>{if(!document.hidden)void refreshMatches();},15000);
   document.addEventListener('visibilitychange',()=>{if(!document.hidden)void refreshMatches();});
 });
+

@@ -53,6 +53,7 @@ Auth.ready.then(async()=>{
         SUPA.client.from('teams').select('id,name,tag,game,region,captain_id,logo_path').eq('organization_id',org.id).order('name'),
         canStaff?SUPA.client.rpc('list_organization_staff',{p_organization_id:org.id}):Promise.resolve({data:[],error:null})
       ]);
+      await applyOrganizationTeamLogos(teams.data||[]);
       if(teams.error)throw teams.error;if(members.error)throw members.error;
       const captains=canManageTeams?await SUPA.client.rpc('list_organization_player_accounts',{p_organization_id:org.id}):{data:[],error:null};
       if(captains.error)throw captains.error;
@@ -118,3 +119,4 @@ Auth.ready.then(async()=>{
   buildConsoleStrip();
   try{await render();}catch(error){list.innerHTML='<div class="team-empty">Your organization records could not be loaded.</div>';fail('Organization workspace unavailable',error);}
 }).catch(error=>toast('err','Organization workspace unavailable',error?.message||'Please reload and try again.'));
+

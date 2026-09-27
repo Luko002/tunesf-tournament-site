@@ -22,6 +22,7 @@ async function loadPublicProfile(){
   if(!data){showProfileLinkState('This public profile could not be found.');return;}
   if(isTeam){
     const team=data.team;if(!team){showProfileLinkState('This team could not be found.');return;}
+    await applyOrganizationTeamLogos([team]);
     document.title=`${team.name} — TUNESF`;$('#profileTitle').innerHTML=`<span class="profile-title-identity">${identityImage(team.logo_path,team.name,72,'team')} <span class="profile-title-name">${esc(team.name)}</span></span> <span class="out2">${esc(team.tag||'')}</span>`;$('#profileCrumb').textContent=team.name;$('#profileSubtitle').textContent=`${profileGameLabel(team.game)} · ${team.region||'Region not set'} · Captain ${team.captain||'not listed'}`;
     const rosterByPlayer=new Map();
     (data.roster||[]).forEach((member,index)=>{

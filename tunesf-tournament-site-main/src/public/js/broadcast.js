@@ -67,6 +67,7 @@ async function loadEvent(){
       stageIds.length?SUPA.client.from('tournament_matches').select('id,stage_id,round_number,position,home_registration_id,away_registration_id,home_score,away_score,status,scheduled_at,completed_at').in('stage_id',stageIds).order('round_number').order('position'):Promise.resolve({data:[],error:null})
     ]);
     if(teamResult.error)throw teamResult.error;if(matchResult.error)throw matchResult.error;
+    await applyOrganizationTeamLogos(teamResult.data||[]);
     const teamMap=new Map((teamResult.data||[]).map(team=>[team.id,team]));
     const regTeamMap=new Map(registrationRows.map(row=>[row.id,row.team_id]));
     const standings=new Map();
@@ -100,3 +101,4 @@ document.addEventListener('fullscreenchange',()=>{
 loadEvent();
 setInterval(()=>{if(!document.hidden)loadEvent();},30000);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)loadEvent();});
+

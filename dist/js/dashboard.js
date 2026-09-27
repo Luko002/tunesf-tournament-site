@@ -63,6 +63,9 @@ Auth.ready.then(async()=>{
   const renderMatches=async()=>{
     const {data,error}=await SUPA.client.rpc('get_my_team_matches');if(error)throw error;
     const rows=data||[],now=Date.now();
+    const identities=new Map();rows.forEach(match=>{if(match.your_team_id)identities.set(match.your_team_id,{id:match.your_team_id,logo_path:match.your_team_logo_path});if(match.opponent_team_id)identities.set(match.opponent_team_id,{id:match.opponent_team_id,logo_path:match.opponent_team_logo_path});});
+    await applyOrganizationTeamLogos([...identities.values()]);
+    rows.forEach(match=>{match.your_team_logo_path=identities.get(match.your_team_id)?.logo_path||match.your_team_logo_path;match.opponent_team_logo_path=identities.get(match.opponent_team_id)?.logo_path||match.opponent_team_logo_path;});
     rows.sort((a,b)=>{
       const priority=m=>m.match_status==='live'?0:m.match_status==='paused'?1:m.match_status==='ready'&&m.scheduled_at&&new Date(m.scheduled_at)>now?2:3;
       return priority(a)-priority(b)||(a.scheduled_at?new Date(a.scheduled_at).getTime():Infinity)-(b.scheduled_at?new Date(b.scheduled_at).getTime():Infinity);
@@ -95,6 +98,7 @@ Auth.ready.then(async()=>{
       const {data:teams, error:teamsError}=await SUPA.client.from('teams')
       .select('id,name,tag,game,region,logo_path').in('id',ids);
     if(teamsError)throw teamsError;
+    await applyOrganizationTeamLogos(teams||[]);
     const byTeam=new Map((memberships||[]).map(row=>[row.team_id,row]));
     const rosters=await Promise.all((teams||[]).map(async team=>{
       const {data,error}=await SUPA.client.rpc('list_team_roster',{p_team_id:team.id});
@@ -133,3 +137,4 @@ Auth.ready.then(async()=>{
   setInterval(()=>renderMatches().catch(error=>console.warn('Match schedule refresh failed:',error)),30000);
   icons();
 }).catch(error=>toast('err','Player workspace unavailable',error.message||'Please reload and try again.'));
+

@@ -38,6 +38,7 @@ Auth.ready.then(async()=>{
       matchPlayerIds.length?SUPA.client.from('public_profiles').select('id,avatar_path').in('id',matchPlayerIds):{data:[],error:null}
     ]);
     if(teamAssets.error)throw teamAssets.error;if(playerAssets.error)throw playerAssets.error;
+    await applyOrganizationTeamLogos(teamAssets.data||[]);
     const teamLogoById=new Map((teamAssets.data||[]).map(team=>[team.id,team.logo_path]));
     const avatarById=new Map((playerAssets.data||[]).map(profile=>[profile.id,profile.avatar_path]));
     const home=sides.find(team=>team.side==='home'),away=sides.find(team=>team.side==='away');
@@ -295,3 +296,4 @@ Auth.ready.then(async()=>{
   try{await loadRoom();roomSignature=signatureFor(room,latestResultSignature,latestReadinessSignature);await loadMessages(true);let polling=false;setInterval(async()=>{if(polling)return;polling=true;try{await refreshRoom();await loadMessages(false);}catch(error){console.warn('Match room refresh failed:',error);}finally{polling=false;}},3500);}
   catch(error){roomError(error.message||'You need to be part of this match to open its room.');}
 }).catch(error=>roomError(error.message||'Please sign in and try again.'));
+

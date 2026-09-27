@@ -30,7 +30,7 @@ Auth.ready.then(async()=>{
     const query=String($('#adminTeamSearch')?.value||'').trim().toLocaleLowerCase();
     const filtered=adminTeams.filter(team=>`${team.name} ${team.tag} ${team.game} ${team.region||''}`.toLocaleLowerCase().includes(query));
     $('#adminTeamCount').textContent=`Showing ${filtered.length} of ${adminTeams.length} teams`;
-    host.innerHTML=filtered.map(team=>`<li class="admin-team-row" data-admin-team-row><div class="admin-team-identity">${identityImage(team.logo_path,team.name,42)}<span class="admin-team-copy"><b>${esc(team.name)}</b><span>${esc(team.tag)} · ${esc(GAMES[team.game]?.label||team.game)}${team.region?` · ${esc(team.region)}`:''}</span></span></div><form class="admin-team-rename" data-admin-team-rename="${esc(team.id)}" data-original-name="${esc(team.name)}"><label><span>Team name</span><input name="name" value="${esc(team.name)}" minlength="2" maxlength="80" required${READ_ONLY_PREVIEW?' disabled':''}></label><button class="btn btn-line btn-sm" type="submit"${READ_ONLY_PREVIEW?' disabled title="Changes are disabled in this production-connected preview."':''}>Save name</button></form><div class="admin-team-photo"><label><span>Team logo</span><input type="file" data-admin-team-logo="${esc(team.id)}" accept="image/jpeg,image/png,image/webp"${READ_ONLY_PREVIEW?' disabled':''}></label>${team.logo_path?`<button class="btn btn-line btn-sm" type="button" data-admin-team-logo-remove="${esc(team.id)}" data-team-name="${esc(team.name)}"${READ_ONLY_PREVIEW?' disabled':''}>Remove logo</button>`:''}</div><button class="btn btn-line btn-sm team-danger-action" type="button" data-admin-team-delete="${esc(team.id)}" data-team-name="${esc(team.name)}"${READ_ONLY_PREVIEW?' disabled title="Changes are disabled in this production-connected preview."':''}>Delete team</button></li>`).join('')||`<li class="team-empty">${adminTeams.length?'No teams match your search.':'No teams found.'}</li>`;
+    host.innerHTML=filtered.map(team=>`<li class="admin-team-row" data-admin-team-row><div class="admin-team-identity">${identityImage(team.logo_path,team.name,42)}<span class="admin-team-copy"><b>${esc(team.name)}</b><span>${esc(team.tag)} · ${esc(GAMES[team.game]?.label||team.game)}${team.region?` · ${esc(team.region)}`:''}</span></span></div><form class="admin-team-rename" data-admin-team-rename="${esc(team.id)}" data-original-name="${esc(team.name)}"><label><span>Team name</span><input name="name" value="${esc(team.name)}" minlength="2" maxlength="80" required${READ_ONLY_PREVIEW?' disabled':''}></label><button class="btn btn-line btn-sm" type="submit"${READ_ONLY_PREVIEW?' disabled title="Changes are disabled in this production-connected preview."':''}>Save name</button></form><div class="admin-team-photo">${team.organization_id?'<span>Uses organization logo</span>':`<label><span>Team logo</span><input type="file" data-admin-team-logo="${esc(team.id)}" accept="image/jpeg,image/png,image/webp"${READ_ONLY_PREVIEW?' disabled':''}></label>${team.team_logo_path?`<button class="btn btn-line btn-sm" type="button" data-admin-team-logo-remove="${esc(team.id)}" data-team-name="${esc(team.name)}"${READ_ONLY_PREVIEW?' disabled':''}>Remove logo</button>`:''}`}</div><button class="btn btn-line btn-sm team-danger-action" type="button" data-admin-team-delete="${esc(team.id)}" data-team-name="${esc(team.name)}"${READ_ONLY_PREVIEW?' disabled title="Changes are disabled in this production-connected preview."':''}>Delete team</button></li>`).join('')||`<li class="team-empty">${adminTeams.length?'No teams match your search.':'No teams found.'}</li>`;
   }
   async function loadAdminTeams(){
     const host=$('#adminTeamList');if(!host)return;
@@ -42,7 +42,7 @@ Auth.ready.then(async()=>{
       rows.push(...(data||[]));
       if((data||[]).length<pageSize)break;
     }
-    adminTeams=rows;renderAdminTeams();
+    await applyOrganizationTeamLogos(rows);adminTeams=rows;renderAdminTeams();
   }
   async function loadMetrics(){
     const host=$('#adminMetrics'),charts=$('#adminAnalyticsCharts'),updated=$('#adminMetricsUpdated');
@@ -160,3 +160,4 @@ Auth.ready.then(async()=>{
   const results=await Promise.allSettled([loadMetrics(),loadRoles(),loadAudit(),loadAdminTeams()]);
   for(const result of results)if(result.status==='rejected')report('Administration data unavailable',result.reason);
 }).catch(error=>toast('err','Administration unavailable',error?.message||'Please reload and try again.'));
+

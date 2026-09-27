@@ -94,7 +94,28 @@ const Auth={
 
 function publicMediaUrl(path){
   if(!path||!SUPA.client)return '';
+  if(/^https?:\/\//i.test(String(path)))return String(path);
   return SUPA.client.storage.from('public-media').getPublicUrl(path).data.publicUrl;
+}
+const FEDERATION_CLUB_LOGOS={
+  'tunisian-national-team':'https://esports.tunesf.tn/media/19143/conversions/eaglegold-medium.webp','asatb-e-sport':'https://esports.tunesf.tn/media/19172/conversions/atb-medium.webp','stade-gabesien':'https://esports.tunesf.tn/media/20632/conversions/26sgg-medium.webp','olympique-el-ayoun':'https://esports.tunesf.tn/media/20610/conversions/26aayounn-medium.webp','gng-amazigh':'https://esports.tunesf.tn/media/19133/conversions/جمعية-جيم-وجيم-للألعاب-الإلكترونية-GNG-ESPORTS-medium.webp','el-menzah-e-sport':'https://esports.tunesf.tn/media/19141/conversions/المنزه-الرياضي-medium.webp','jeunesse-sportive-kairouanaise':'https://esports.tunesf.tn/media/19527/conversions/jsk-medium.webp','el-hamma-martial-arts-association':'https://esports.tunesf.tn/media/20624/conversions/26hammaa-medium.webp','maknassy-sport-for-all-association':'https://esports.tunesf.tn/media/20630/conversions/26maknesss-medium.webp','elite-sports-siliana':'https://esports.tunesf.tn/media/2844/conversions/elitesiliana-medium.webp','thysdrus-esports':'https://esports.tunesf.tn/media/19529/conversions/th-medium.webp','zahrouni-e-sports':'https://esports.tunesf.tn/media/19139/conversions/Untitled-medium.webp','association-sportive-mansoura':'https://esports.tunesf.tn/media/19127/conversions/mansoura-logo-medium.webp','mechanic-sports':'https://esports.tunesf.tn/media/650/conversions/asm-medium.webp','monastir-sport-for-all-association':'https://esports.tunesf.tn/media/20616/conversions/26asptt-medium.webp','olympique-mednine':'https://esports.tunesf.tn/media/22745/conversions/Club_olympique_de_Médenine-medium.webp','jbenyena-e-sports':'https://esports.tunesf.tn/media/19140/conversions/jbeniana-medium.webp','grand-8-bardo':'https://esports.tunesf.tn/media/632/conversions/g8-medium.webp','tadhamon-esports':'https://esports.tunesf.tn/media/634/conversions/atsl-medium.webp','association-aigle-sportif-de-sfax':'https://esports.tunesf.tn/media/2846/conversions/aass-medium.webp','avenir-sport-ariana':'https://esports.tunesf.tn/media/648/conversions/ariana-medium.webp','the-tunisian-association-of-youth-and-science-in-korba':'https://esports.tunesf.tn/media/21152/conversions/WhatsApp-Image-2026-04-13-at-13.54.23-medium.webp','team-wave':'https://esports.tunesf.tn/media/14171/conversions/team-wavee-medium.webp','jandouba-e-sports':'https://esports.tunesf.tn/media/636/conversions/jendouba-medium.webp','royal-class-gaming':'https://esports.tunesf.tn/media/19147/conversions/جمعية-ROYAL-CLASS-medium.webp','supreme-leaders':'https://esports.tunesf.tn/media/19534/conversions/l-medium.webp','olympique-mnihla':'https://esports.tunesf.tn/media/19123/conversions/om-medium.webp','est-esports':'https://esports.tunesf.tn/media/19128/conversions/الترجي-الرياضي-التونسي-medium.webp','simplicity-esports':'https://esports.tunesf.tn/media/16438/conversions/WhatsApp-Image-2025-11-11-at-15.43.58-medium.webp','enfida-sports':'https://esports.tunesf.tn/media/19531/conversions/enfida-medium.webp','tunisian-professionals-association-of-kasserine':'https://esports.tunesf.tn/media/20634/conversions/266-medium.webp','kef-sports-club':'https://esports.tunesf.tn/media/20626/conversions/26keff-medium.webp','avenir-sportif-de-gabes':'https://esports.tunesf.tn/media/20621/conversions/26gabess-medium.webp'
+};
+async function applyOrganizationTeamLogos(teams){
+  if(!Array.isArray(teams)||!teams.length||!SUPA.client)return teams;
+  const ids=[...new Set(teams.map(team=>team.id||team.team_id).filter(Boolean))];
+  if(!ids.length)return teams;
+  try{
+    const {data:teamRows,error:teamError}=await SUPA.client.from('teams').select('id,organization_id').in('id',ids);
+    if(teamError)throw teamError;
+    const organizationIds=[...new Set((teamRows||[]).map(team=>team.organization_id).filter(Boolean))];
+    if(!organizationIds.length)return teams;
+    const {data:organizations,error:organizationError}=await SUPA.client.from('organizations').select('id,slug').in('id',organizationIds);
+    if(organizationError)throw organizationError;
+    const slugById=new Map((organizations||[]).map(org=>[org.id,org.slug]));
+    const logoByTeam=new Map((teamRows||[]).flatMap(team=>{const logo=FEDERATION_CLUB_LOGOS[slugById.get(team.organization_id)];return logo?[[team.id,logo]]:[]}));
+    teams.forEach(team=>{const logo=logoByTeam.get(team.id||team.team_id);if(logo){team.team_logo_path??=team.logo_path;team.logo_path=logo;team.organization_logo_url=logo;}});
+  }catch(error){console.warn('Organization logos could not be applied to teams:',error.message||error);}
+  return teams;
 }
 function identityImage(path,label,size=36,kind='team'){
   const initials=String(label||'?').trim().split(/\s+/).slice(0,2).map(part=>part[0]||'').join('').replace(/[^a-z0-9]/gi,'').toUpperCase()||'?';
