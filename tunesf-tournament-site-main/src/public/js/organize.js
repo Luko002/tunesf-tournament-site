@@ -7,6 +7,7 @@ if(!requirePerm('CREATE_TOURNAMENT'))return;
 
 const WSTEPS=['IDENTITY & GAME','FORMAT & RULES','SCHEDULE & ROSTER','EVENT DETAILS','REVIEW & PUBLISH'];
 let wI=0; const WSEL={game:null,struct:'single',series:'BO3'};
+const isSuperAdmin=Auth.user?.roles?.includes('SUPER_ADMIN')===true;
 
 async function loadOrganizations(){
   const wrap=$('#wOrganizationWrap'),select=$('#wOrganization');
@@ -28,15 +29,20 @@ function renderMaps(){
   $$('#wMaps button').forEach(b=>b.onclick=()=>b.classList.toggle('act'));
 }
 $$('#wGames .gtile').forEach(b=>b.onclick=()=>{$$('#wGames .gtile').forEach(x=>x.classList.remove('act'));b.classList.add('act');WSEL.game=b.dataset.g;renderMaps();});
-$$('#wStruct button').forEach(b=>b.onclick=()=>{$$('#wStruct button').forEach(x=>x.classList.remove('act'));b.classList.add('act');WSEL.struct=b.dataset.v;});
+function expectedPlayoffByes(qualifiers){let size=1;while(size<qualifiers)size*=2;return size-qualifiers;}
+function syncQualifierSetting(){const setting=$('#wQualifierWrap');if(setting)setting.hidden=!isSuperAdmin||WSEL.struct!=='rr';const qualifiers=Math.max(2,Math.min(64,Number($('#wPlayoffQualifiers')?.value)||4)),byes=expectedPlayoffByes(qualifiers),byeInput=$('#wPlayoffByes');if(byeInput){byeInput.value=String(byes);byeInput.min=String(byes);byeInput.max=String(byes);}const hint=$('#wPlayoffByeHint');if(hint)hint.textContent=`A ${qualifiers}-team single-elimination bracket needs ${byes} first-round bye${byes===1?'':'s'} for its highest seeds.`;}
+$$('#wStruct button').forEach(b=>b.onclick=()=>{$$('#wStruct button').forEach(x=>x.classList.remove('act'));b.classList.add('act');WSEL.struct=b.dataset.v;syncQualifierSetting();});
 $$('#wSeries button').forEach(b=>b.onclick=()=>{$$('#wSeries button').forEach(x=>x.classList.remove('act'));b.classList.add('act');WSEL.series=b.dataset.v;});
 renderMaps();
+syncQualifierSetting();
+$('#wPlayoffQualifiers')?.addEventListener('input',syncQualifierSetting);
 $('#wAc').onclick=()=>$('#wAc').classList.toggle('act');
 const localDateTimeInput=value=>{const d=new Date(value);return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,16);};
 const defaultStart=new Date(Date.now()+21*864e5);defaultStart.setHours(18,0,0,0);
 $('#wDate').value=localDateTimeInput(defaultStart);$('#wDate').min=localDateTimeInput(new Date(Date.now()+60000));
 $('#wRegistrationOpens').value=localDateTimeInput(new Date(Date.now()+60000));
-$('#wRegistrationCloses').value=localDateTimeInput(defaultStart);$('#wRegistrationCloses').min=$('#wRegistrationOpens').value;
+const defaultRegistrationClose=new Date(defaultStart.getTime()-60*60000);
+$('#wRegistrationCloses').value=localDateTimeInput(defaultRegistrationClose);$('#wRegistrationCloses').min=$('#wRegistrationOpens').value;
 $('#wRegistrationOpens').addEventListener('change',()=>{$('#wRegistrationCloses').min=$('#wRegistrationOpens').value;});
 function updDist(){
   const pool=Math.round((+$('#wPrize').value||0)*100)/100;
@@ -52,7 +58,7 @@ function wGo(i){wI=i;$('#wError').textContent='';
   $$('.wstep').forEach(s=>{const k=+s.dataset.i;s.classList.toggle('act',k===i);s.classList.toggle('done',k<i);if(k===i)s.setAttribute('aria-current','step');else s.removeAttribute('aria-current');});
   $$('.wpane').forEach(p=>p.classList.toggle('act',+p.dataset.w===i));
   $('#wBack').disabled=i===0; $('#wCount').textContent=i<4?`STEP ${i+1} OF 5 · NEXT: ${WSTEPS[i+1]}`:'STEP 5 OF 5 · REVIEW YOUR EVENT';
-  $('#wNext').innerHTML=i===4?'<i data-lucide="megaphone"></i>PUBLISH':'NEXT<i data-lucide="chevron-right"></i>'; icons();
+  const next=$('#wNext');next.innerHTML=i===4?(READ_ONLY_PREVIEW?'<i data-lucide="lock-keyhole"></i>PUBLISH UNAVAILABLE':'<i data-lucide="megaphone"></i>PUBLISH'):'NEXT<i data-lucide="chevron-right"></i>';next.disabled=i===4&&READ_ONLY_PREVIEW;if(i===4&&READ_ONLY_PREVIEW)next.setAttribute('aria-describedby','organizerReadonly');else next.removeAttribute('aria-describedby');icons();
   if(i===4)wSum();}
 function wSum(){const maps=$$('#wMaps button.act').length;
   const st={single:'Single elimination',double:'Double elimination',rr:'Round robin → playoffs'}[WSEL.struct];
@@ -60,7 +66,7 @@ function wSum(){const maps=$$('#wMaps button.act').length;
   const registrationOpens=$('#wRegistrationOpens').value?new Intl.DateTimeFormat(undefined,{dateStyle:'medium',timeStyle:'short'}).format(new Date($('#wRegistrationOpens').value)):'Not set';
   const registrationCloses=$('#wRegistrationCloses').value?new Intl.DateTimeFormat(undefined,{dateStyle:'medium',timeStyle:'short'}).format(new Date($('#wRegistrationCloses').value)):'Not set';
   const cover=$('#wCover').files[0];
-  const rows=[['TOURNAMENT', $('#wName').value.trim()||'Not named'],['GAME',WSEL.game?GAMES[WSEL.game].label:'— SELECT A GAME —'],['COVER IMAGE',cover?cover.name:'NOT ADDED'],['STRUCTURE',st],['SERIES FORMAT',WSEL.series],
+  const rows=[['TOURNAMENT', $('#wName').value.trim()||'Not named'],['GAME',WSEL.game?GAMES[WSEL.game].label:'— SELECT A GAME —'],['COVER IMAGE',cover?cover.name:'NOT ADDED'],['STRUCTURE',st],...(isSuperAdmin&&WSEL.struct==='rr'?[['PLAYOFF QUALIFIERS',`TOP ${Number($('#wPlayoffQualifiers').value)||4} TEAMS`],['FIRST-ROUND BYES',`${Number($('#wPlayoffByes').value)||0} TOP SEEDS`]]:[]),['SERIES FORMAT',WSEL.series],
     ['MAP POOL',maps+' MAPS'],['ANTI-CHEAT',$('#wAc').classList.contains('act')?'REQUIRED':'OPTIONAL'],
     ['REGISTRATION OPENS',registrationOpens],['REGISTRATION CLOSES',registrationCloses],['TOURNAMENT START',d],['SLOTS',$('#wMax').value+' TEAMS · '+$('#wRoster').value],['SUBSTITUTES',$('#wSubs').value+' PER TEAM'],
     ['RULES',$('#wRules').value.trim()?`${$('#wRules').value.trim().length} CHARACTERS`:'NOT ADDED'],['PRIZE POOL',fmt(+$('#wPrize').value||0)+' TND'],['PRIZE SHARE',$('#wFirstShare').value+'% / '+$('#wSecondShare').value+'%'],
@@ -68,12 +74,13 @@ function wSum(){const maps=$$('#wMaps button.act').length;
   $('#wSum').innerHTML=rows.map(r=>`<div class="srow"><span>${esc(r[0])}</span><b>${esc(r[1])}</b></div>`).join('');}
 function stepError(){
   if(wI===0){if(!$('#wName').value.trim())return {field:$('#wName'),message:'Add a tournament name to continue.'};if(!WSEL.game)return {field:$('#wGames .gtile'),message:'Choose a game to continue.'};}
-  if(wI===2){const max=Number($('#wMax').value),start=$('#wDate').value,opens=$('#wRegistrationOpens').value,closes=$('#wRegistrationCloses').value,now=Date.now();if(!Number.isInteger(max)||max<2||max>512)return {field:$('#wMax'),message:'Choose a limit from 2 to 512 teams.'};if(!start||new Date(start).getTime()<=now)return {field:$('#wDate'),message:'Choose a tournament start time in the future.'};if(!opens)return {field:$('#wRegistrationOpens'),message:'Choose when team registration opens.'};if(!closes)return {field:$('#wRegistrationCloses'),message:'Choose when team registration closes.'};if(new Date(closes)<=new Date(opens))return {field:$('#wRegistrationCloses'),message:'Registration must close after it opens.'};if(new Date(closes)>=new Date(start))return {field:$('#wRegistrationCloses'),message:'Registration must close before the tournament starts.'};if(new Date(closes)<=now)return {field:$('#wRegistrationCloses'),message:'Registration close time must be in the future.'};}
+  if(wI===1&&isSuperAdmin&&WSEL.struct==='rr'){const qualifiers=Number($('#wPlayoffQualifiers').value),byes=Number($('#wPlayoffByes').value);if(!Number.isInteger(qualifiers)||qualifiers<2||qualifiers>64)return {field:$('#wPlayoffQualifiers'),message:'Choose between 2 and 64 playoff qualifiers.'};if(qualifiers>Number($('#wMax').value||64))return {field:$('#wPlayoffQualifiers'),message:'Playoff qualifiers cannot exceed the tournament team limit.'};if(!Number.isInteger(byes)||byes!==expectedPlayoffByes(qualifiers))return {field:$('#wPlayoffByes'),message:`A balanced ${qualifiers}-team playoff needs ${expectedPlayoffByes(qualifiers)} first-round byes.`};}
+  if(wI===2){const max=Number($('#wMax').value),start=$('#wDate').value,opens=$('#wRegistrationOpens').value,closes=$('#wRegistrationCloses').value,now=Date.now();if(!Number.isInteger(max)||max<2||max>512)return {field:$('#wMax'),message:'Choose a limit from 2 to 512 teams.'};if(isSuperAdmin&&WSEL.struct==='rr'&&Number($('#wPlayoffQualifiers').value)>max)return {field:$('#wMax'),message:'The tournament team limit must be at least the playoff qualifier count.'};if(!start||new Date(start).getTime()<=now)return {field:$('#wDate'),message:'Choose a tournament start time in the future.'};if(!opens)return {field:$('#wRegistrationOpens'),message:'Choose when team registration opens.'};if(!closes)return {field:$('#wRegistrationCloses'),message:'Choose when team registration closes.'};if(new Date(closes)<=new Date(opens))return {field:$('#wRegistrationCloses'),message:'Registration must close after it opens.'};if(new Date(closes)>=new Date(start))return {field:$('#wRegistrationCloses'),message:'Registration must close before the tournament starts.'};if(new Date(closes)<=now)return {field:$('#wRegistrationCloses'),message:'Registration close time must be in the future.'};}
   if(wI===3){const prize=Number($('#wPrize').value),share=Number($('#wFirstShare').value);if(!Number.isFinite(prize)||prize<0)return {field:$('#wPrize'),message:'The prize pool must be zero or more.'};if(!Number.isInteger(share)||share<0||share>100)return {field:$('#wFirstShare'),message:'Set the first-place share between 0 and 100.'};if($('#wRules').value.trim().length>6000)return {field:$('#wRules'),message:'Keep tournament rules under 6,000 characters.'};}
   return null;
 }
 function validateStep(){const issue=stepError();if(!issue)return true;$('#wError').textContent=issue.message;issue.field?.focus();issue.field?.scrollIntoView({behavior:'smooth',block:'center'});return false;}
-function validateAllSteps(){for(const index of [0,2,3]){const prior=wI;wI=index;const issue=stepError();wI=prior;if(issue){wGo(index);$('#wError').textContent=issue.message;issue.field?.focus();return false;}}return true;}
+function validateAllSteps(){for(const index of [0,1,2,3]){const prior=wI;wI=index;const issue=stepError();wI=prior;if(issue){wGo(index);$('#wError').textContent=issue.message;issue.field?.focus();return false;}}return true;}
 $('#wNext').onclick=()=>{if(wI===4){wPublish();return;}if(validateStep())wGo(wI+1);};
 $('#wBack').onclick=()=>wGo(wI-1);
 
@@ -93,6 +100,7 @@ $('#wCover').addEventListener('change',()=>{
 });
 
 async function wPublish(){
+  if(READ_ONLY_PREVIEW)return;
   if(!validateAllSteps())return;
   if(!WSEL.game){toast('err','Game required','Pick the game in step 1 before publishing.');wGo(0);return;}
   const name=$('#wName').value.trim();
@@ -124,6 +132,7 @@ async function wPublish(){
       map_pool:$$('#wMaps button.act').map(button=>button.dataset.m),
       anti_cheat_required:$('#wAc').classList.contains('act'),
       prize_pool:prizePool,currency:'TND'
+      ,...(isSuperAdmin&&WSEL.struct==='rr'?{playoff_qualifier_count:Number($('#wPlayoffQualifiers').value)||4,playoff_bye_count:Number($('#wPlayoffByes').value)||0}:{})
     }});
   }catch(error){toast('err','Could not publish tournament',error.message||'Check your connection and try again.');return;}
   if(result.error){toast('err','Could not save tournament',result.error.message);return;}
@@ -162,5 +171,6 @@ async function wPublish(){
 }
 
 buildConsoleStrip();
+if(READ_ONLY_PREVIEW){const note=document.createElement('p');note.id='organizerReadonly';note.className='admin-readonly-note';note.setAttribute('role','note');note.textContent='You can configure and review this tournament, but publishing is disabled in this local preview because it is connected to production. Use a writable staging environment to create events.';$('#consoleStrip')?.insertAdjacentElement('afterend',note);}
 wGo(0); icons();
 });

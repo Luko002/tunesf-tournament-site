@@ -8,6 +8,19 @@ Auth.ready.then(async()=>{
   if(!matchId){roomError('Open this room from a scheduled match.');return;}
 
   let room=null,chatBusy=false,lastMessageIds='',latestResultSignature='',latestReadinessSignature='',selectedStep=null,lastActiveStep=-1;
+  function applyPreviewWriteState(){
+    if(!READ_ONLY_PREVIEW)return;
+    host.querySelectorAll('[data-confirm-roster],[data-confirm-ready],[data-veto-action],[data-veto-side],#roomResultForm,#roomChatForm').forEach(control=>{
+      if(control.matches('form'))control.querySelectorAll('input,select,textarea,button').forEach(input=>input.disabled=true);
+      else control.disabled=true;
+      control.setAttribute('title','Changes are disabled in this production-connected preview.');
+    });
+    if(!host.querySelector('[data-preview-write-note]')){
+      const note=document.createElement('p');note.className='team-empty preview-write-note';note.dataset.previewWriteNote='';note.setAttribute('role','note');
+      note.textContent='Match actions and chat messages are disabled in this production-connected preview. You can still review rosters, the veto, score reports, and chat history.';
+      host.prepend(note);
+    }
+  }
   const signatureFor=(match,reports,readiness)=>JSON.stringify({status:match.status,scheduled_at:match.scheduled_at,home_score:match.home_score,away_score:match.away_score,teams:(match.teams||[]).map(team=>[team.team_id,team.confirmed]),veto:match.veto||[],reports,readiness});
   const loadRoom=async()=>{
     const {data,error}=await SUPA.client.rpc('get_match_room',{p_match_id:matchId});
@@ -29,6 +42,7 @@ Auth.ready.then(async()=>{
     const avatarById=new Map((playerAssets.data||[]).map(profile=>[profile.id,profile.avatar_path]));
     const home=sides.find(team=>team.side==='home'),away=sides.find(team=>team.side==='away');
     const label=String(room.status||'scheduled').replaceAll('_',' ');
+    const finished=room.status==='completed'||room.status==='forfeit';
     const ownsTeam=team=>team?.captain_id===Auth.user.id||(team?.roster||[]).some(member=>member.user_id===Auth.user.id);
     const mapPool=room.map_pool||[],vetoes=room.veto||[];
     const bestOf=Number(String(room.best_of||'').match(/\d+/)?.[0]||1);
@@ -73,11 +87,10 @@ Auth.ready.then(async()=>{
       const isCaptain=team.captain_id===Auth.user.id;
       const roster=team.roster||[];
       const members=roster.length?roster.map(member=>`<li><i data-lucide="check"></i>${identityImage(avatarById.get(member.user_id),member.name||'Player',24,'player')}<span><a href="player.html?id=${encodeURIComponent(member.user_id)}">${esc(member.name||'Player')}</a>${member.role==='captain'?' · Captain':member.role==='substitute'?' · Substitute':''}</span></li>`).join(''):'<li class="team-empty">No active players in this game roster.</li>';
-      const status=team.confirmed?`Roster locked${team.confirmed_by_name?` · ${esc(team.confirmed_by_name)}`:''}`:isCaptain&&room.status==='ready'?'Awaiting your confirmation':'Awaiting captain confirmation';
+      const status=team.confirmed?`Roster locked${team.confirmed_by_name?` · ${esc(team.confirmed_by_name)}`:''}`:finished?'Not confirmed before match start':isCaptain&&room.status==='ready'?'Awaiting your confirmation':'Awaiting captain confirmation';
       const action=team.confirmed?'':isCaptain&&room.status==='ready'?`<button class="btn btn-gold btn-sm room-confirm" type="button" data-confirm-roster="${esc(team.side)}"><i data-lucide="check"></i>Confirm roster</button>`:'';
       return `<article class="room-roster-card${team.confirmed?' is-confirmed':''}"><div class="room-roster-team">${identityImage(teamLogoById.get(team.team_id),team.name||'Team',48,'team')}<b><a href="team.html?id=${encodeURIComponent(team.team_id)}">${esc(team.name||'Team')}</a>${isCaptain?' · You':''}</b></div><ul class="room-roster-list">${members}</ul><p class="room-roster-status">${status}</p>${action}</article>`;
     };
-    const finished=room.status==='completed'||room.status==='forfeit';
     const stepMarkup=['Roster',mapPool.length>=2?'Map veto':'No veto','Ready','Result'].map((name,index)=>{const done=index<activeStep||index===3&&finished,current=index===activeStep&&!finished;return `<button type="button" class="room-step${selectedStep===index?' active':''}${current?' current':''}${done?' done':''}" data-room-step="${index}" aria-label="${name}: ${done?'complete':current?'current step':'up next'}"${current?' aria-current="step"':''} aria-pressed="${selectedStep===index}"${index>activeStep||index===1&&mapPool.length<2?' disabled':''}><i>${done?'✓':index+1}</i>${name}</button>`;}).join('');
     const nextStage=finished?'Match complete.':activeStep===0?'Next: both captains confirm their rosters.':activeStep===1?'Next: finish the map veto.':activeStep===2?'Next: players confirm readiness.':ownsTeam(home)||ownsTeam(away)?'Next: report your team’s result when the match is live.':'Next: the teams report their result.';
     const readyTeamMarkup=team=>{
@@ -86,7 +99,7 @@ Auth.ready.then(async()=>{
       const isMe=members.some(member=>member.user_id===Auth.user.id);
       return `<article class="room-roster-card${members.length&&confirmed.length===members.length?' is-confirmed':''}"><div class="room-roster-team">${identityImage(teamLogoById.get(team.team_id),team.name||'Team',48,'team')}<b><a href="team.html?id=${encodeURIComponent(team.team_id)}">${esc(team.name||'Team')}</a></b></div><ul class="room-roster-list">${members.map(member=>`<li><i data-lucide="${isReady(team,member)?'check-circle':'circle'}"></i>${identityImage(avatarById.get(member.user_id),member.name||'Player',24,'player')}<span><a href="player.html?id=${encodeURIComponent(member.user_id)}">${esc(member.name||'Player')}</a>${member.user_id===Auth.user.id?' · You':''} · ${isReady(team,member)?'Ready':'Waiting'}</span></li>`).join('')||'<li class="team-empty">No active roster players.</li>'}</ul><p class="room-roster-status">${confirmed.length}/${members.length} players ready</p>${isMe&&!readyIds.has(`${team.team_id}:${Auth.user.id}`)&&room.status==='ready'?'<button class="btn btn-gold btn-sm room-confirm" type="button" data-confirm-ready>Confirm I am ready</button>':''}</article>`;
     };
-    const readyMarkup=`<section class="room-ready"><h2 class="room-roster-heading">Player ready check</h2><p>Every active player on the locked rosters confirms readiness after the veto. The referee starts the match when both teams are ready.</p>${bothConfirmed&&(mapPool.length<2||vetoComplete)?`<div class="room-roster-grid">${readyTeamMarkup(home)}${readyTeamMarkup(away)}</div>`:'<p class="team-empty">Waiting for roster confirmation and map veto.</p>'}</section>`;
+    const readyMarkup=finished?`<section class="room-ready"><h2 class="room-roster-heading">Player ready check</h2><p>Readiness checks are closed because this match is ${esc(label)}.</p></section>`:`<section class="room-ready"><h2 class="room-roster-heading">Player ready check</h2><p>Every active player on the locked rosters confirms readiness after the veto. The referee starts the match when both teams are ready.</p>${bothConfirmed&&(mapPool.length<2||vetoComplete)?`<div class="room-roster-grid">${readyTeamMarkup(home)}${readyTeamMarkup(away)}</div>`:'<p class="team-empty">Waiting for roster confirmation and map veto.</p>'}</section>`;
     const vetoMarkup=()=>{
       if(!bothConfirmed)return '';
       if(mapPool.length<2)return `<section class="room-veto"><h2 class="room-roster-heading">Map veto unavailable</h2><p class="room-veto-note">The tournament organizer needs to configure its map pool before teams can veto.</p></section>`;
@@ -99,12 +112,12 @@ Auth.ready.then(async()=>{
       else if(picks.length<picksRequired){action='pick';currentTeam=picks.length%2===0?homeFirst:awaySecond;mapNumber=picks.length+1;actionLabel=`Pick Map ${mapNumber} of ${picksRequired}`;}
       else if(bans.length<bansRequired){action='ban';currentTeam=(isValorant&&bestOf===3?(bans.length-initialBans)%2:bans.length%2)===0?homeFirst:awaySecond;actionLabel=`Ban ${bans.length+1} of ${bansRequired}`;}
       else if(isValorant&&decider&&!decider.side_choice){action='decider_side';currentTeam=bestOf===3?homeFirst:awaySecond;mapNumber=bestOf;actionLabel=`Choose starting side · Map ${mapNumber}`;}
-      const isYourTurn=currentTeam?.captain_id===Auth.user.id;
+      const isYourTurn=!finished&&currentTeam?.captain_id===Auth.user.id;
       const picked=new Map(picks.map(item=>[item.map_name,item]));
       const removed=new Map(vetoes.filter(item=>item.action_type==='ban').map(item=>[item.map_name,item]));
       const isAvailable=map=>!picked.has(map)&&!removed.has(map)&&(!decider||decider.map_name!==map);
       const turnText=action==='ban'?'ban a map':action==='pick'?`choose Map ${mapNumber}`:action==='side'?`choose the starting side for Map ${mapNumber}`:action==='decider_side'?`choose the starting side for Map ${mapNumber}`:'';
-      const prompt=vetoComplete?'Veto complete · maps are locked in order.':!action?'Waiting for veto state…':isYourTurn?`Your turn · ${actionLabel} · choose below.`:`${currentTeam?.name||'The other team'} captain to ${turnText}.`;
+      const prompt=finished?(vetoComplete?'Veto complete · maps are locked in order.':'The match concluded before the veto was completed.'):vetoComplete?'Veto complete · maps are locked in order.':!action?'Waiting for veto state…':isYourTurn?`Your turn · ${actionLabel} · choose below.`:`${currentTeam?.name||'The other team'} captain to ${turnText}.`;
       const orderCards=Array.from({length:bestOf},(_,index)=>{
         const mapNo=index+1,selection=picks.find(item=>Number(item.map_number)===mapNo)||(Number(decider?.map_number)===mapNo?decider:null);
         const team=selection?.action_type==='decider'?null:selection?.team_id===home?.team_id?home:away;
@@ -153,7 +166,7 @@ Auth.ready.then(async()=>{
       :!myRegistration?'Only a player or captain on a participating team can report the result.'
       :!['live','result_pending'].includes(room.status)?'Result reporting is available while the match is live.':'You can report your team’s score below.';
     const resultMarkup=`<section class="room-result"><h2 class="room-roster-heading">Match result</h2><p class="room-result-note">A team captain or active team player can report the series score. Add a screenshot as evidence.</p>${reportRows?`<ul class="team-invites room-result-reports">${reportRows}</ul>`:''}${evidenceMarkup?`<div class="room-evidence-grid">${evidenceMarkup}</div>`:''}${resultFormVisible?`<form class="room-result-form" id="roomResultForm"><label>Home team wins<input name="home_score" type="number" min="0" max="${Math.ceil(bestOf/2)}" required></label><label>Away team wins<input name="away_score" type="number" min="0" max="${Math.ceil(bestOf/2)}" required></label><label class="room-result-upload"><span>Screenshot or evidence · up to 5 files, 20 MB each</span><input name="evidence" type="file" accept="image/jpeg,image/png,image/webp,video/mp4" multiple></label><small>Enter series wins. First to ${Math.ceil(bestOf/2)} wins takes the series. A referee reviews the report.</small><button class="btn btn-gold btn-sm" type="submit">Submit result</button></form>`:`<p class="team-empty room-result-state">${esc(resultMessage)}</p>`}${evidenceMarkup||reportRows?'':`<p class="team-empty room-result-state">No score reports or screenshots yet.</p>`}</section>`;
-    host.innerHTML=`<section class="dcard room-main"><div class="dh"><i data-lucide="swords"></i><span>${esc(String(room.stage_name||'Match').toUpperCase())} · ROUND ${room.round_number} · MATCH ${room.position}</span><span class="bracket-stage-meta">${esc(label)}</span></div><div class="room-score"><div class="room-side">${identityImage(teamLogoById.get(home?.team_id),home?.name||'Home team',44,'team')}<span class="room-side-text"><b class="room-side-name"><a href="team.html?id=${encodeURIComponent(home?.team_id||'')}">${esc(home?.name||'TBD')}</a></b><small class="room-side-tag">${ownsTeam(home)?'YOUR TEAM':'OPPONENT'} · ${esc(home?.tag||'')}</small></span></div><div class="room-score-center"><strong>${room.home_score??0}<span style="display:inline;color:var(--faint)"> : </span>${room.away_score??0}</strong><span>${room.scheduled_at?esc(new Intl.DateTimeFormat(undefined,{dateStyle:'medium',timeStyle:'short'}).format(new Date(room.scheduled_at))):room.started_at?'Match started':'Time to be announced'}</span></div><div class="room-side room-side-away"><span class="room-side-text"><b class="room-side-name"><a href="team.html?id=${encodeURIComponent(away?.team_id||'')}">${esc(away?.name||'TBD')}</a></b><small class="room-side-tag">${ownsTeam(away)?'YOUR TEAM':'OPPONENT'} · ${esc(away?.tag||'')}</small></span>${identityImage(teamLogoById.get(away?.team_id),away?.name||'Away team',44,'team')}</div></div><div class="room-steps" aria-label="Match progress">${stepMarkup}</div><p class="room-next-step" aria-live="polite">${esc(nextStage)}</p><div class="room-rosters"><h2 class="room-roster-heading">Pre-match · Team roster confirmation</h2><div class="room-roster-grid">${teamMarkup(home)}${teamMarkup(away)}</div>${vetoMarkup()}${readyMarkup}${resultMarkup}</div></section><aside class="dcard room-chat"><div class="dh"><span><i data-lucide="radio"></i>Match chat</span><small class="room-chat-caption">MATCH PARTICIPANTS</small></div><div class="room-chat-messages" id="roomMessages" aria-live="polite"><p class="room-chat-empty">Loading match chat…</p></div><form class="room-chat-form" id="roomChatForm"><textarea id="roomChatInput" maxlength="1000" aria-label="Message the match room" placeholder="Message the room…" required></textarea><button type="submit" aria-label="Send message"><i data-lucide="send"></i></button></form><p class="room-chat-note">Messages are visible to this match’s teams, assigned referee, and event staff.</p></aside>`;
+    host.innerHTML=`<section class="dcard room-main"><div class="dh"><i data-lucide="swords"></i><span>${esc(String(room.stage_name||'Match').toUpperCase())} · ROUND ${room.round_number} · MATCH ${room.position}</span><span class="bracket-stage-meta">${esc(label)}</span></div><div class="room-score"><div class="room-side">${identityImage(teamLogoById.get(home?.team_id),home?.name||'Home team',44,'team')}<span class="room-side-text"><b class="room-side-name"><a href="team.html?id=${encodeURIComponent(home?.team_id||'')}">${esc(home?.name||'TBD')}</a></b><small class="room-side-tag">${ownsTeam(home)?'YOUR TEAM':'OPPONENT'} · ${esc(home?.tag||'')}</small></span></div><div class="room-score-center"><strong>${room.home_score??0}<span style="display:inline;color:var(--faint)"> : </span>${room.away_score??0}</strong><span>${room.scheduled_at?esc(new Intl.DateTimeFormat(undefined,{dateStyle:'medium',timeStyle:'short'}).format(new Date(room.scheduled_at))):room.started_at?'Match started':'Time to be announced'}</span></div><div class="room-side room-side-away"><span class="room-side-text"><b class="room-side-name"><a href="team.html?id=${encodeURIComponent(away?.team_id||'')}">${esc(away?.name||'TBD')}</a></b><small class="room-side-tag">${ownsTeam(away)?'YOUR TEAM':'OPPONENT'} · ${esc(away?.tag||'')}</small></span>${identityImage(teamLogoById.get(away?.team_id),away?.name||'Away team',44,'team')}</div></div><div class="room-steps" aria-label="Match progress">${stepMarkup}</div><p class="room-next-step" aria-live="polite">${esc(nextStage)}</p><div class="room-rosters"><h2 class="room-roster-heading">${finished?'Match roster record':'Pre-match · Team roster confirmation'}</h2><div class="room-roster-grid">${teamMarkup(home)}${teamMarkup(away)}</div>${vetoMarkup()}${readyMarkup}${resultMarkup}</div></section><aside class="dcard room-chat"><div class="dh"><span><i data-lucide="radio"></i>Match chat</span><small class="room-chat-caption">MATCH PARTICIPANTS</small></div><div class="room-chat-messages" id="roomMessages" aria-live="polite"><p class="room-chat-empty">Loading match chat…</p></div><form class="room-chat-form" id="roomChatForm"><textarea id="roomChatInput" maxlength="1000" aria-label="Message the match room" placeholder="Message the room…" required></textarea><button type="submit" aria-label="Send message"><i data-lucide="send"></i></button></form><p class="room-chat-note">Messages are visible to this match’s teams, assigned referee, and event staff.</p></aside>`;
     const progress=host.querySelector('.room-steps'),body=host.querySelector('.room-rosters');
     const rosterPanel=document.createElement('section');
     rosterPanel.dataset.roomPanel='0';
@@ -172,6 +185,7 @@ Auth.ready.then(async()=>{
     progress.addEventListener('click',event=>{const button=event.target.closest('[data-room-step]');if(button&&!button.disabled)showStep(Number(button.dataset.roomStep));});
     showStep(selectedStep);
     host.querySelectorAll('[data-confirm-roster]').forEach(button=>button.addEventListener('click',async()=>{
+      if(READ_ONLY_PREVIEW)return;
       button.disabled=true;
       try{
         const {error}=await SUPA.client.rpc('confirm_match_roster',{p_match_id:matchId});if(error)throw error;
@@ -179,6 +193,7 @@ Auth.ready.then(async()=>{
       }catch(error){toast('err','Could not confirm roster',error.message||'Please try again.');button.disabled=false;}
     }));
     host.querySelectorAll('[data-veto-action][data-map-name]').forEach(button=>button.addEventListener('click',async()=>{
+      if(READ_ONLY_PREVIEW)return;
       button.disabled=true;
       const action=button.dataset.vetoAction,mapName=button.dataset.mapName||null;
       try{
@@ -187,6 +202,7 @@ Auth.ready.then(async()=>{
       }catch(error){toast('err','Veto action failed',error.message||'Please try again.');button.disabled=false;}
     }));
     host.querySelectorAll('[data-veto-side]').forEach(button=>button.addEventListener('click',async()=>{
+      if(READ_ONLY_PREVIEW)return;
       button.disabled=true;
       const action=button.dataset.vetoAction;
       try{
@@ -195,6 +211,7 @@ Auth.ready.then(async()=>{
       }catch(error){toast('err','Could not set starting side',error.message||'Please try again.');button.disabled=false;}
     }));
     host.querySelectorAll('[data-confirm-ready]').forEach(button=>button.addEventListener('click',async()=>{
+      if(READ_ONLY_PREVIEW)return;
       button.disabled=true;
       try{
         const {error}=await SUPA.client.rpc('confirm_match_player_ready',{p_match_id:matchId});if(error)throw error;
@@ -203,6 +220,7 @@ Auth.ready.then(async()=>{
     }));
     $('#roomResultForm')?.addEventListener('submit',async event=>{
       event.preventDefault();
+      if(READ_ONLY_PREVIEW)return;
       const form=event.currentTarget,button=form.querySelector('button[type="submit"]');button.disabled=true;
       const values=new FormData(form),files=[...(form.elements.evidence?.files||[])],keys=[];
       try{
@@ -224,6 +242,7 @@ Auth.ready.then(async()=>{
     });
     $('#roomChatForm').addEventListener('submit',async event=>{
       event.preventDefault();const input=$('#roomChatInput'),body=input.value.trim();
+      if(READ_ONLY_PREVIEW)return;
       if(!body)return;
       const button=event.currentTarget.querySelector('button[type="submit"]');button.disabled=true;
       try{
@@ -232,7 +251,7 @@ Auth.ready.then(async()=>{
       }catch(error){toast('err','Message not sent',error.message||'Please try again.');}
       finally{button.disabled=false;}
     });
-    icons();
+    applyPreviewWriteState();icons();
   };
   const loadMessages=async force=>{
     if(chatBusy)return;chatBusy=true;

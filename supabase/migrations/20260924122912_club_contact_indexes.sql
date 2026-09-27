@@ -1,0 +1,1 @@
+create index team_game_members_team_user_idx on public.team_game_members(team_id,user_id); create index team_join_requests_team_game_idx on public.team_join_requests(team_id,game); create index team_join_requests_user_idx on public.team_join_requests(user_id);

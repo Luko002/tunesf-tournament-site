@@ -1,6 +1,10 @@
 node_modules/
 *.log
+.env*
 
 .vercel
 /.pnpm-store/
 /tunesf-tournament-site-main/dist/
+
+.vercel
+.env*

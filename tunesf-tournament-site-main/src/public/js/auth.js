@@ -115,6 +115,23 @@ const hash=new URLSearchParams(location.hash.slice(1));
 const isRecovery=hash.get('type')==='recovery'||(q.get('mode')==='recovery'&&Auth.is());
 if(hash.get('error_description'))toast('err','Reset link unavailable',hash.get('error_description').replaceAll('+',' '));
 if(isRecovery){showForm('reset');$('#authTabs').style.display='none';}
+else if(Auth.is()){
+  const signedRole=ROLES[Auth.highestRole()]?.label||'Member';
+  const requiredRole=need&&ROLES[need]?ROLES[need]:null;
+  const canContinue=!requiredRole||Auth.user.roles.includes(need)||Auth.has(need);
+  const destination=canContinue?redirectAfterAuth():null;
+  $('#authTabs').style.display='none';
+  [inForm,upForm,recoverForm,resetForm].forEach(form=>form.style.display='none');
+  $('#needBanner').innerHTML=`<section class="auth-session-card" role="status"><div class="auth-session-heading"><span class="auth-session-icon"><i data-lucide="circle-user-round" aria-hidden="true"></i></span><div><b>${canContinue?'You’re already signed in':'This account has limited access'}</b><span>Signed in as <strong>${esc(Auth.user.name)}</strong> · ${esc(signedRole)}</span></div></div>${requiredRole&&!canContinue?`<p>This page requires ${esc(requiredRole.label)} access. Sign out and choose an account with that role to continue.</p>`:'<p>Your account is ready. Continue to your workspace or sign out to switch accounts.</p>'}<div class="auth-session-actions">${destination?`<a class="btn btn-gold btn-sm" href="${esc(destination)}"><i data-lucide="arrow-right" aria-hidden="true"></i>Continue to workspace</a>`:''}<button class="btn btn-line btn-sm" type="button" id="switchAccount"><i data-lucide="log-out" aria-hidden="true"></i>Sign out and switch account</button></div></section>`;
+  $('#visitorLink').hidden=true;
+  $('#switchAccount').addEventListener('click',async event=>{
+    const button=event.currentTarget;button.disabled=true;
+    try{await Auth.signOut();}
+    catch(error){button.disabled=false;toast('err','Could not switch account',error?.message||'Please try again.');}
+  });
+  document.querySelector('.auth-side h2').innerHTML='Your account.<br><span class="out2">Your federation access.</span>';
+  document.querySelector('.auth-side>p:not(.mono)').textContent='Your signed-in account provides the workspace access assigned by TUNESF.';
+}
 SUPA.client.auth.onAuthStateChange(event=>{
   if(event==='PASSWORD_RECOVERY')showForm('reset');
 });

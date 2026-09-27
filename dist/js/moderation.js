@@ -9,19 +9,20 @@ Auth.ready.then(async()=>{
   }
   const isModerator=Auth.has('REVIEW_REPORTS');
   buildConsoleStrip();
-  panel.innerHTML=`<section class="dcard" style="grid-column:1/-1"><div class="dh"><i data-lucide="flag"></i>Submit a report</div><div class="db">
-    <form id="caseCreateForm" class="team-create-form">
-      <label><span>What are you reporting?</span><select name="subject_type"><option value="user">User</option><option value="team">Team</option><option value="tournament">Tournament</option><option value="match">Match incident</option></select></label>
-      <label><span>Record UUID</span><input name="subject_id" required pattern="[0-9a-fA-F-]{36}" placeholder="Paste the record or match ID"></label>
-      <label><span>Category</span><select name="category" required><option value="conduct">Unsportsmanlike conduct</option><option value="cheating">Cheating concern</option><option value="harassment">Harassment</option><option value="impersonation">Impersonation</option><option value="other">Other</option></select></label>
-      <label><span>What happened?</span><textarea name="description" required minlength="5" maxlength="5000"></textarea></label>
-      <button class="btn btn-gold btn-sm" type="submit">Submit report</button>
+  panel.innerHTML=`<section class="dcard moderation-report-card" style="grid-column:1/-1"><div class="dh"><i data-lucide="flag"></i>Submit a report</div><div class="db">${READ_ONLY_PREVIEW?'<p class="admin-readonly-note" id="moderationReadonly" role="note">Reports and moderation decisions are disabled in this local preview because it is connected to production. Use a writable staging environment to submit or review a case.</p>':''}
+    <form id="caseCreateForm" class="team-create-form"${READ_ONLY_PREVIEW?' aria-describedby="moderationReadonly"':''}>
+      <label><span>What are you reporting?</span><select name="subject_type"${READ_ONLY_PREVIEW?' disabled':''}><option value="user">User</option><option value="team">Team</option><option value="tournament">Tournament</option><option value="match">Match incident</option></select></label>
+      <label><span>Record UUID</span><input name="subject_id" required pattern="[0-9a-fA-F-]{36}" placeholder="Paste the record or match ID"${READ_ONLY_PREVIEW?' disabled':''}></label>
+      <label><span>Category</span><select name="category" required${READ_ONLY_PREVIEW?' disabled':''}><option value="conduct">Unsportsmanlike conduct</option><option value="cheating">Cheating concern</option><option value="harassment">Harassment</option><option value="impersonation">Impersonation</option><option value="other">Other</option></select></label>
+      <label><span>What happened?</span><textarea name="description" required minlength="5" maxlength="5000"${READ_ONLY_PREVIEW?' disabled':''}></textarea></label>
+      <button class="btn btn-gold btn-sm" type="submit"${READ_ONLY_PREVIEW?' disabled aria-describedby="moderationReadonly"':''}>Submit report</button>
     </form>
   </div></section>
-  ${isModerator?'<section class="dcard" style="grid-column:1/-1"><div class="dh"><i data-lucide="shield-check"></i>Moderation queue</div><div class="db"><p class="team-empty">Only cases visible to your moderation assignment appear here.</p></div><ul id="caseQueue" class="team-invites"></ul></section>':''}
+  ${isModerator?`<section class="dcard moderation-queue-card" style="grid-column:1/-1"><div class="dh"><i data-lucide="shield-check"></i>Moderation queue</div><div class="db"><p class="team-empty">Only cases visible to your moderation assignment appear here.</p>${READ_ONLY_PREVIEW?'<p class="admin-readonly-note" role="note">Case assignment and decisions are disabled in this production-connected preview.</p>':''}</div><ul id="caseQueue" class="team-invites"></ul></section>`:''}
   <section class="dcard" style="grid-column:1/-1"><div class="dh"><i data-lucide="history"></i>Your submitted reports</div><div class="db" id="myReports" aria-live="polite"><p class="team-empty">Loading reports...</p></div></section>`;
   icons();
   const queue=$('#caseQueue'),reports=$('#myReports');
+  const shortId=value=>value?`${String(value).slice(0,8)}…${String(value).slice(-4)}`:'';
   const incidentMatch=new URLSearchParams(location.search).get('incident_match');
   if(incidentMatch){$('#caseCreateForm [name="subject_type"]').value='match';$('#caseCreateForm [name="subject_id"]').value=incidentMatch;}
   const fail=(title,error)=>toast('err',title,error?.message||'Please try again.');
@@ -35,17 +36,19 @@ Auth.ready.then(async()=>{
     if(queue){
       const open=rows.filter(row=>!['resolved','dismissed'].includes(row.status));
       queue.innerHTML=open.length?open.map(row=>{
-        const subject=row.subject_user_id?`User ${row.subject_user_id}`:row.subject_team_id?`Team ${row.subject_team_id}`:row.subject_tournament_id?`Tournament ${row.subject_tournament_id}`:`Match ${row.subject_match_id}`;
+        const subjectId=row.subject_user_id||row.subject_team_id||row.subject_tournament_id||row.subject_match_id;
+        const subjectType=row.subject_user_id?'User':row.subject_team_id?'Team':row.subject_tournament_id?'Tournament':'Match';
+        const subject=`${subjectType} ${shortId(subjectId)}`;
         const owns=row.assigned_to===Auth.user.id;
-        const controls=owns?`<form class="case-review-form" data-review-case="${esc(row.id)}"><label><span>Decision</span><input name="decision" minlength="2" maxlength="100" required placeholder="Finding or action"></label><label><span>Decision notes</span><textarea name="note" maxlength="3000"></textarea></label><div class="event-actions"><button class="btn btn-gold btn-sm" name="status" value="resolved">Resolve</button><button class="btn btn-line btn-sm" name="status" value="dismissed">Dismiss</button></div></form>`:
-          row.assigned_to?'<small>Assigned to another reviewer.</small>':`<button class="btn btn-line btn-sm" type="button" data-claim-case="${esc(row.id)}">Take case</button>`;
-        return `<li class="event-reg case-row"><div><b>${esc(row.category)} · ${esc(subject)}</b><small>${esc(row.status.replaceAll('_',' '))} · Submitted ${esc(date(row.created_at))}</small><p>${esc(row.description)}</p></div>${controls}</li>`;
+        const controls=owns?`<form class="case-review-form" data-review-case="${esc(row.id)}"${READ_ONLY_PREVIEW?' aria-describedby="moderationReadonly"':''}><label><span>Decision</span><input name="decision" minlength="2" maxlength="100" required placeholder="Finding or action"${READ_ONLY_PREVIEW?' disabled':''}></label><label><span>Decision notes</span><textarea name="note" maxlength="3000"${READ_ONLY_PREVIEW?' disabled':''}></textarea></label><div class="event-actions"><button class="btn btn-gold btn-sm" name="status" value="resolved"${READ_ONLY_PREVIEW?' disabled':''}>Resolve</button><button class="btn btn-line btn-sm" name="status" value="dismissed"${READ_ONLY_PREVIEW?' disabled':''}>Dismiss</button></div></form>`:
+          row.assigned_to?'<small>Assigned to another reviewer.</small>':`<button class="btn btn-line btn-sm" type="button" data-claim-case="${esc(row.id)}"${READ_ONLY_PREVIEW?' disabled aria-describedby="moderationReadonly"':''}>Take case</button>`;
+        return `<li class="event-reg case-row"><div><b>${esc(row.category)} · ${esc(subject)}</b><small>${esc(row.status.replaceAll('_',' '))} · Submitted ${esc(date(row.created_at))}</small><p>${esc(row.description)}</p>${row.decision?`<small>Decision: ${esc(row.decision)}${row.decision_note?` · ${esc(row.decision_note)}`:''}</small>`:''}</div>${controls}</li>`;
       }).join(''):'<li class="team-empty">No open reports.</li>';
     }
     icons();
   }
   $('#caseCreateForm').addEventListener('submit',async event=>{
-    event.preventDefault();const form=event.currentTarget,button=form.querySelector('button[type="submit"]');button.disabled=true;
+    event.preventDefault();if(READ_ONLY_PREVIEW)return;const form=event.currentTarget,button=form.querySelector('button[type="submit"]');button.disabled=true;
     const values=new FormData(form),type=values.get('subject_type'),id=String(values.get('subject_id')).trim();
     try{
       const {error}=await SUPA.client.rpc('create_moderation_case',{
@@ -57,12 +60,12 @@ Auth.ready.then(async()=>{
     }catch(error){fail('Could not submit report',error);}finally{button.disabled=false;}
   });
   panel.addEventListener('click',async event=>{
-    const button=event.target.closest('[data-claim-case]');if(!button)return;button.disabled=true;
+    const button=event.target.closest('[data-claim-case]');if(!button||READ_ONLY_PREVIEW)return;button.disabled=true;
     try{const {error}=await SUPA.client.rpc('assign_moderation_case',{p_case_id:button.dataset.claimCase,p_reviewer_id:Auth.user.id});if(error)throw error;toast('ok','Case assigned','You are now the reviewer.');await render();}
     catch(error){fail('Could not take case',error);button.disabled=false;}
   });
   panel.addEventListener('submit',async event=>{
-    const form=event.target.closest('[data-review-case]');if(!form)return;event.preventDefault();
+    const form=event.target.closest('[data-review-case]');if(!form)return;event.preventDefault();if(READ_ONLY_PREVIEW)return;
     const button=event.submitter;if(!button)return;button.disabled=true;const values=new FormData(form);
     try{
       const {error}=await SUPA.client.rpc('review_moderation_case',{p_case_id:form.dataset.reviewCase,p_new_status:button.value,p_decision:String(values.get('decision')).trim(),p_decision_note:String(values.get('note')||'').trim()});

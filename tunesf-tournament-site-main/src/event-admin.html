@@ -5,7 +5,7 @@
 <title>Tournament Operations — TUNESF</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=Barlow:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/css/style.css?v=20260926c"><link rel="stylesheet" href="/css/pages.css?v=20260926e">
+<link rel="stylesheet" href="/css/style.css?v=20260927h"><link rel="stylesheet" href="/css/pages.css?v=20260927k">
 </head>
 <body>
 <header class="top" id="topbar"><div class="wrap navbar">
@@ -18,6 +18,12 @@
     <p class="lead">Manage assigned tournaments: review registrations, order bracket seeds, correct round-robin records, assign a referee, and advance each event.</p>
   </div></section>
   <section class="sec tight"><div class="wrap"><div class="console-strip" id="consoleStrip"></div>
+    <div class="event-ops-toolbar" aria-label="Find and filter tournaments">
+      <label class="event-ops-search">Find a tournament<input id="eventSearch" type="search" placeholder="Search event, team, game…" autocomplete="off"></label>
+      <label class="event-ops-status-filter">Status<select id="eventStatusFilter"><option value="all">All statuses</option><option value="draft">Draft</option><option value="registration_open">Registration open</option><option value="registration_closed">Registration closed</option><option value="in_progress">In progress</option><option value="completed">Completed</option><option value="cancelled">Cancelled</option></select></label>
+      <p id="eventResultsCount" class="event-ops-count" aria-live="polite">Loading tournaments…</p>
+    </div>
+    <p id="eventFilterEmpty" class="team-empty event-ops-empty" hidden>No tournaments match these filters. Clear the search or choose “All statuses” to see every event.</p>
     <div id="eventList" class="dgrid" aria-live="polite" style="margin-top:22px"><div class="team-empty">Loading your tournaments…</div></div>
   </div></section>
 </main>
@@ -28,5 +34,5 @@
   <div class="f-col"><b>Governance</b><a href="roles.html">Roles &amp; permissions</a><a href="login.html">Sign in</a></div>
 </div><div class="f-bot"><span>© 2026 TUNESF — TUNISIAN ESPORTS FEDERATION</span><span>Official records and actions are stored in TUNESF.</span></div></div></footer>
 <script src="https://unpkg.com/lucide@1.47.0/dist/umd/lucide.min.js" integrity="sha384-v15JX+vZHMR3T6LQR9N6e6wIKrKOdNTbdj8j+e5irqq3L9gCauJz2vGlUzomWyUp" crossorigin="anonymous"></script><script>if(!window.lucide){document.write('<script src="https://cdn.jsdelivr.net/npm/lucide@1.47.0/dist/umd/lucide.min.js" integrity="sha384-v15JX+vZHMR3T6LQR9N6e6wIKrKOdNTbdj8j+e5irqq3L9gCauJz2vGlUzomWyUp" crossorigin="anonymous"><\/script>')}</script>
-<script src="/js/supabase-config.js?v=4"></script><script src="/js/core.js?v=20260926g"></script><script src="/js/event-admin.js?v=20260926f"></script>
+<script src="/js/supabase-config.js?v=4"></script><script src="/js/core.js?v=20260927g"></script><script src="/js/event-admin.js?v=20260927i"></script>
 </body></html>

@@ -11,10 +11,15 @@ Auth.ready.then(async()=>{
     <details class="dcard player-team-create"><summary class="dh"><i data-lucide="plus"></i>Create a team</summary><div class="db"><p class="team-empty">Creating a team makes you its captain. Match its roster size to the tournament before registering.</p><form id="playerTeamCreateForm" class="team-create-form"><label><span>Team name</span><input name="name" minlength="2" maxlength="80" required placeholder="e.g. Tunisian squad"></label><label><span>Short tag</span><input name="tag" minlength="2" maxlength="8" required placeholder="TNS"></label><label><span>Game</span><select name="game" required><option value="">Choose a game</option><option value="cs2">Counter-Strike 2</option><option value="val">VALORANT</option><option value="lol">League of Legends</option><option value="rl">Rocket League</option><option value="mlbb">Mobile Legends: Bang Bang</option><option value="eafc">EA SPORTS FC</option><option value="efootball">eFootball</option></select></label><label><span>Region</span><input name="region" maxlength="100" placeholder="e.g. Tunis"></label><label><span>Team logo (optional, JPG/PNG/WebP up to 5 MB)</span><input name="logo" type="file" accept="image/jpeg,image/png,image/webp"></label><button class="btn btn-gold btn-sm" type="submit"><i data-lucide="plus"></i>Create team</button></form></div></details>
     <section class="player-team-list" id="playerTeams" aria-live="polite"><div class="team-empty">Loading your teams…</div></section>
     <details class="dcard player-profile"><summary class="dh"><i data-lucide="user-round"></i>Player profile</summary><div class="db"><div class="profile-image-editor">${identityImage(Auth.user.avatarPath,Auth.user.name,72,'player')}<label><span>Profile picture (JPG/PNG/WebP, up to 5 MB)</span><input id="playerAvatarInput" type="file" accept="image/jpeg,image/png,image/webp"></label><button class="btn btn-line btn-sm" id="removePlayerAvatar" type="button"${Auth.user.avatarPath?'':' hidden'}>Remove picture</button></div><p class="team-empty">Add a Discord contact name only if you want it shown on your team rosters.</p><form id="playerDiscordForm" class="club-contact"><label><span>Discord username (optional)</span><input name="discord_username" minlength="2" maxlength="64" value="${esc(Auth.user.discordUsername||'')}" placeholder="Leave blank to remove it"></label><button class="btn btn-line btn-sm" type="submit">Save profile</button></form></div></details>`;
+  if(READ_ONLY_PREVIEW){
+    const note=document.createElement('p');note.id='playerWorkspaceReadonly';note.className='admin-readonly-note';note.setAttribute('role','note');note.textContent='Profile, team, and membership changes are disabled in this local preview because it is connected to production. Use a writable staging environment to save changes.';
+    wrap.querySelector('.console-strip')?.insertAdjacentElement('afterend',note);
+    wrap.querySelectorAll('#playerTeamCreateForm input,#playerTeamCreateForm select,#playerTeamCreateForm textarea,#playerTeamCreateForm button,#playerDiscordForm input,#playerDiscordForm button,#playerAvatarInput,#removePlayerAvatar').forEach(control=>{control.disabled=true;control.setAttribute('aria-describedby','playerWorkspaceReadonly');});
+  }
   const list=$('#playerTeams');
   const matchHost=$('#playerMatches');
   $('#playerTeamCreateForm').addEventListener('submit',async event=>{
-    event.preventDefault();
+    event.preventDefault();if(READ_ONLY_PREVIEW)return;
     const form=event.currentTarget,button=form.querySelector('button[type="submit"]'),values=Object.fromEntries(new FormData(form));
     button.disabled=true;
     try{
@@ -28,7 +33,7 @@ Auth.ready.then(async()=>{
     finally{button.disabled=false;}
   });
   wrap.querySelector('#playerDiscordForm').addEventListener('submit',async event=>{
-    event.preventDefault();
+    event.preventDefault();if(READ_ONLY_PREVIEW)return;
     const form=event.currentTarget,button=form.querySelector('button[type="submit"]'),discordUsername=String(new FormData(form).get('discord_username')||'').trim();
     if(discordUsername&& (discordUsername.length<2||discordUsername.length>64)){toast('err','Discord username invalid','Leave it blank or enter 2–64 characters.');return;}
     button.disabled=true;
@@ -44,13 +49,13 @@ Auth.ready.then(async()=>{
   const avatarInput=wrap.querySelector('#playerAvatarInput'),removeAvatar=wrap.querySelector('#removePlayerAvatar');
   const saveAvatar=async path=>{const {error}=await SUPA.client.rpc('set_player_avatar_path',{p_avatar_path:path});if(error)throw error;};
   avatarInput.addEventListener('change',async()=>{
-    const file=avatarInput.files?.[0];if(!file)return;avatarInput.disabled=true;
+    if(READ_ONLY_PREVIEW)return;const file=avatarInput.files?.[0];if(!file)return;avatarInput.disabled=true;
     try{const previous=Auth.user.avatarPath,path=await uploadPublicImage(file,'profiles');await saveAvatar(path);Auth.user.avatarPath=path;await removePublicImage(previous);toast('ok','Profile picture saved','Your picture now appears on your public player profile and team rosters.');await render();}
     catch(error){toast('err','Could not save profile picture',error.message||'Please try again.');}
     finally{avatarInput.disabled=false;avatarInput.value='';}
   });
   removeAvatar.addEventListener('click',async()=>{
-    if(!Auth.user.avatarPath)return;removeAvatar.disabled=true;
+    if(READ_ONLY_PREVIEW||!Auth.user.avatarPath)return;removeAvatar.disabled=true;
     try{const previous=Auth.user.avatarPath;await saveAvatar(null);Auth.user.avatarPath=null;await removePublicImage(previous);toast('ok','Profile picture removed','Your default player image is shown now.');await render();}
     catch(error){toast('err','Could not remove profile picture',error.message||'Please try again.');}
     finally{removeAvatar.disabled=false;}
@@ -66,13 +71,19 @@ Auth.ready.then(async()=>{
     const label={live:'LIVE',paused:'PAUSED',ready:'UPCOMING',result_pending:'RESULT REVIEW',disputed:'DISPUTE REVIEW'};
     matchHost.innerHTML=`<div class="personal-match-grid">${rows.map(match=>{
       const live=match.match_status==='live',scheduled=match.match_status==='ready'&&match.scheduled_at;
-      const center=live?`${match.your_score??0} : ${match.opponent_score??0}`:scheduled?`<span data-player-match-timer="${esc(match.scheduled_at)}"></span>`:'Schedule pending';
-      return `<article class="personal-match-card"><div class="personal-match-top"><b>${esc(match.tournament_name)}</b><span class="badge ${live?'live':''}">${label[match.match_status]||esc(match.match_status)}</span></div><div class="personal-match-vs"><span>${identityImage(match.your_team_logo_path,match.your_team_name||'Your team',32,'team')}<b>${esc(match.your_team_name||'Your team')}</b><small>${esc(match.your_team_tag||'')}</small></span><strong>${center}</strong><span>${identityImage(match.opponent_team_logo_path,match.opponent_team_name||'Opponent TBD',32,'team')}<b>${esc(match.opponent_team_name||'Opponent TBD')}</b><small>${esc(match.opponent_team_tag||'')}</small></span></div><div class="personal-match-foot"><span>${esc(match.stage_name)} · Round ${match.round_number}</span><span>${scheduled?esc(new Intl.DateTimeFormat(undefined,{dateStyle:'medium',timeStyle:'short'}).format(new Date(match.scheduled_at))):''}</span></div><a class="btn btn-gold btn-sm" href="match-room.html?id=${encodeURIComponent(match.match_id)}">Open match room</a></article>`;
+      const overdue=Boolean(scheduled&&new Date(match.scheduled_at).getTime()<=now);
+      const status=overdue?'RESCHEDULE NEEDED':label[match.match_status]||String(match.match_status||'').replaceAll('_',' ');
+      const center=live?`${match.your_score??0} : ${match.opponent_score??0}`:overdue?'Awaiting a new match time':scheduled?`<span data-player-match-timer="${esc(match.scheduled_at)}" role="timer" aria-live="off"></span>`:'Schedule pending';
+      const scheduledLabel=scheduled?new Intl.DateTimeFormat(undefined,{dateStyle:'medium',timeStyle:'short'}).format(new Date(match.scheduled_at)):'';
+      return `<article class="personal-match-card"><div class="personal-match-top"><b>${esc(match.tournament_name)}</b><span class="badge ${live?'live':overdue?'needs-check':''}">${esc(status)}</span></div><div class="personal-match-vs"><span>${identityImage(match.your_team_logo_path,match.your_team_name||'Your team',32,'team')}<b>${esc(match.your_team_name||'Your team')}</b><small>${esc(match.your_team_tag||'')}</small></span><strong>${center}</strong><span>${identityImage(match.opponent_team_logo_path,match.opponent_team_name||'Opponent TBD',32,'team')}<b>${esc(match.opponent_team_name||'Opponent TBD')}</b><small>${esc(match.opponent_team_tag||'')}</small></span></div><div class="personal-match-foot"><span>${esc(match.stage_name)} · Round ${match.round_number}</span><span>${overdue&&scheduledLabel?`Was scheduled ${esc(scheduledLabel)}`:esc(scheduledLabel)}</span></div><a class="btn btn-gold btn-sm" href="match-room.html?id=${encodeURIComponent(match.match_id)}">Open match room</a></article>`;
     }).join('')}</div>`;
   };
   const updateMatchTimers=()=>matchHost.querySelectorAll('[data-player-match-timer]').forEach(el=>{
     const seconds=Math.max(0,Math.floor((new Date(el.dataset.playerMatchTimer)-Date.now())/1000));
-    el.textContent=seconds?`${Math.floor(seconds/3600)}:${String(Math.floor(seconds%3600/60)).padStart(2,'0')}:${String(seconds%60).padStart(2,'0')}`:'Starting now';
+    if(seconds){el.textContent=`${Math.floor(seconds/3600)}:${String(Math.floor(seconds%3600/60)).padStart(2,'0')}:${String(seconds%60).padStart(2,'0')}`;return;}
+    el.textContent='—';el.setAttribute('aria-live','polite');
+    const badge=el.closest('.personal-match-card')?.querySelector('.personal-match-top .badge');
+    if(badge){badge.textContent='RESCHEDULE NEEDED';badge.classList.add('needs-check');}
   });
   const render=async()=>{
     list.innerHTML='<div class="team-empty">Loading your teams…</div>';
@@ -99,14 +110,14 @@ Auth.ready.then(async()=>{
       return `<article class="dcard team-card"><div class="dh">${identityImage(team.logo_path,team.name,36,'team')}${esc(team.name)}<span class="mono-r">${esc(team.tag)}</span></div><div class="db">
         <div class="team-meta"><span>${esc(team.game.toUpperCase())}</span><span>${esc(team.region||'Region not set')}</span><span>Your role: ${esc(role)}</span></div>
         <h3 class="team-section-title">Team roster <span>${error?'':roster.length}</span></h3>${members}
-        ${role==='captain'?'<a class="btn btn-line btn-sm" href="captain.html" style="margin-top:14px">Manage team</a>':`<button class="btn btn-line btn-sm" type="button" data-leave-team="${esc(team.id)}" style="margin-top:14px">Leave team</button>`}
+        ${role==='captain'?'<a class="btn btn-line btn-sm" href="captain.html" style="margin-top:14px">Manage team</a>':`<button class="btn btn-line btn-sm" type="button" data-leave-team="${esc(team.id)}" style="margin-top:14px"${READ_ONLY_PREVIEW?' disabled aria-describedby="playerWorkspaceReadonly" title="Membership changes are disabled in this production-connected preview."':''}>Leave team</button>`}
       </div></article>`;
     }).join('');
     icons();
   };
   list.addEventListener('click',async event=>{
     const button=event.target.closest('[data-leave-team]');
-    if(!button||!window.confirm('Leave this team? You may need a new invitation to rejoin.'))return;
+    if(!button||READ_ONLY_PREVIEW||!window.confirm('Leave this team? You may need a new invitation to rejoin.'))return;
     button.disabled=true;
     try{
       const {error}=await SUPA.client.rpc('leave_team',{p_team_id:button.dataset.leaveTeam});

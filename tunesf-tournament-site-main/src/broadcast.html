@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#090b0f">
+<title>Broadcast · TUNESF</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=Barlow:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/broadcast.css?v=2">
+</head>
+<body>
+<header class="broadcast-top">
+  <a class="broadcast-brand" href="index.html"><img src="/assets/tunesf-mark.png" alt="" width="38" height="38"><span><b>TUNESF</b><small>ESPORTS FEDERATION</small></span></a>
+  <div class="broadcast-top-actions"><a id="eventPageLink" href="tournaments.html">Event page</a><span class="broadcast-update" id="broadcastUpdated" role="status" aria-live="polite">Connecting…</span><button id="fullscreenToggle" type="button"><i data-lucide="maximize"></i><span>Full screen</span></button></div>
+</header>
+<main id="broadcastContent" aria-live="polite" aria-busy="true">
+  <div class="broadcast-loading"><span class="broadcast-pulse"></span>Connecting to event feed…</div>
+</main>
+<footer class="broadcast-footer"><span>OFFICIAL TUNESF EVENT FEED</span><span>F TOGGLE FULL SCREEN · ESC TO EXIT</span></footer>
+<script src="https://unpkg.com/lucide@1.47.0/dist/umd/lucide.min.js" integrity="sha384-v15JX+vZHMR3T6LQR9N6e6wIKrKOdNTbdj8j+e5irqq3L9gCauJz2vGlUzomWyUp" crossorigin="anonymous"></script>
+<script>if(!window.lucide){document.write('<script src="https://cdn.jsdelivr.net/npm/lucide@1.47.0/dist/umd/lucide.min.js" integrity="sha384-v15JX+vZHMR3T6LQR9N6e6wIKrKOdNTbdj8j+e5irqq3L9gCauJz2vGlUzomWyUp" crossorigin="anonymous"><\/script>')}</script>
+<script src="/js/supabase-config.js?v=4"></script>
+<script src="/js/core.js?v=20260927e"></script>
+<script src="/js/broadcast.js?v=1"></script>
+</body>
+</html>

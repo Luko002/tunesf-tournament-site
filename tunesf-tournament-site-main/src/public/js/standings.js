@@ -6,7 +6,10 @@ async function renderStandings(stageId){
   standingTable.innerHTML='<div class="team-empty">Loading approved standings…</div>';
   const {data:rows,error}=await SUPA.client.from('tournament_standings').select('registration_id,played,wins,draws,losses,points,score_for,score_against,rank').eq('stage_id',stageId).order('rank');
   if(error)throw error;
-  if(!rows?.length){standingTable.innerHTML='<div class="dcard"><div class="db"><p>No standings available yet. Standings will appear when matches begin.</p></div></div>';return;}
+  if(!rows?.length){
+    const tournamentName=standingEvent.selectedOptions[0]?.dataset.name||'this tournament';
+    standingTable.innerHTML=`<section class="dcard standings-empty" aria-labelledby="standingsEmptyTitle"><div class="dh"><i data-lucide="list-ordered" aria-hidden="true"></i>STANDINGS NOT STARTED</div><div class="db"><h2 id="standingsEmptyTitle">Nothing to rank yet</h2><p>${esc(tournamentName)} has no approved match results for this stage. Choose another tournament above, or follow this event’s fixtures while results come in.</p><a class="btn btn-line btn-sm" href="tournament.html?id=${encodeURIComponent(standingEvent.value)}&view=schedule#eventBrackets">View event schedule</a></div></section>`;icons();return;
+  }
   const ids=[...new Set(rows.map(row=>row.registration_id))];
   const {data:registrations,error:regError}=await SUPA.client.from('tournament_registrations').select('id,team_id').in('id',ids);
   if(regError)throw regError;
@@ -23,13 +26,37 @@ function selectStandingTournament(id){
 (async()=>{
   try{
     await Auth.ready;
-    const {data,error}=await SUPA.client.from('tournament_directory').select('id,name,status').neq('status','draft').order('starts_at',{ascending:false,nullsFirst:false});
+    const {data,error}=await SUPA.client.from('tournament_directory').select('id,name,game,status,starts_at').neq('status','draft').order('starts_at',{ascending:false,nullsFirst:false});
     if(error)throw error;
     const requested=new URLSearchParams(location.search).get('tournament');
     if(!data?.length){standingTable.innerHTML=requested?'<div class="dcard"><div class="dh">Tournament unavailable</div><div class="db"><p>This tournament is unavailable or has not been published.</p><a class="btn btn-line btn-sm" href="tournaments.html">Browse tournaments</a></div></div>':'<div class="dcard"><div class="dh"><i data-lucide="list-ordered"></i>Tournament standings</div><div class="db"><p style="color:var(--dim)">No tournaments yet. Standings will appear after an event starts.</p><a class="btn btn-line btn-sm" href="tournaments.html" style="margin-top:16px">Browse tournaments</a></div></div>';standingEvent.closest('.console-strip')?.remove();icons();return;}
-    standingEvent.innerHTML=data.map(t=>`<option value="${esc(t.id)}">${esc(t.name)}</option>`).join('');
+    const dateLabel=value=>value?new Intl.DateTimeFormat(undefined,{day:'numeric',month:'short',year:'numeric'}).format(new Date(value)):'Date TBA';
+    standingEvent.innerHTML=data.map(t=>{
+      const game=GAMES[t.game]?.label||String(t.game||'Game not set').toUpperCase();
+      const status=String(t.status||'scheduled').replaceAll('_',' ');
+      return `<option value="${esc(t.id)}" data-name="${esc(t.name)}">${esc(t.name)} · ${esc(game)} · ${esc(status)} · ${esc(dateLabel(t.starts_at))}</option>`;
+    }).join('');
     if(requested&&!data.some(t=>t.id===requested)){standingEvent.closest('.console-strip')?.remove();standingTable.innerHTML='<div class="dcard"><div class="dh">Tournament unavailable</div><div class="db"><p>This tournament is unavailable or has not been published.</p><a class="btn btn-line btn-sm" href="tournaments.html">Browse tournaments</a></div></div>';return;}
-    if(requested)standingEvent.value=requested;else selectStandingTournament(standingEvent.value);
+    if(requested)standingEvent.value=requested;
+    else{
+      let preferredId='';
+      const tournamentIds=data.map(t=>t.id);
+      try{
+        const {data:stages,error:stageError}=await SUPA.client.from('tournament_stages').select('id,tournament_id').in('tournament_id',tournamentIds).in('status',['published','in_progress','completed']);
+        if(!stageError&&stages?.length){
+          const stageIds=stages.map(stage=>stage.id);
+          const {data:rows,error:standingsError}=await SUPA.client.from('tournament_standings').select('stage_id').in('stage_id',stageIds);
+          if(!standingsError){
+            const populatedStages=new Set((rows||[]).map(row=>row.stage_id));
+            const populatedTournaments=new Set(stages.filter(stage=>populatedStages.has(stage.id)).map(stage=>stage.tournament_id));
+            const statusPriority={in_progress:0,completed:1,registration_closed:2,registration_open:3};
+            preferredId=data.filter(t=>populatedTournaments.has(t.id)).sort((a,b)=>(statusPriority[a.status]??4)-(statusPriority[b.status]??4)||new Date(b.starts_at||0)-new Date(a.starts_at||0))[0]?.id||'';
+          }
+        }
+      }catch{}
+      if(preferredId)standingEvent.value=preferredId;
+      selectStandingTournament(standingEvent.value);
+    }
     async function loadStages(){
       const {data:stages,error}=await SUPA.client.from('tournament_stages').select('id,name,status').eq('tournament_id',standingEvent.value).in('status',['published','in_progress','completed']).order('stage_number');
       if(error)throw error;

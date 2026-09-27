@@ -14,8 +14,9 @@ Auth.ready.then(()=>{
     show('Sign in to continue','Sign in or create a PLAYER account, then return here to accept the invitation.',`<a class="btn btn-gold btn-sm" href="${esc(login)}" style="margin-top:16px">Sign in or create account</a>`);
     return;
   }
-  show('Invitation ready','This single-use invitation will add your account to the team roster. Accept only if you trust the person who shared this link.',`<button class="btn btn-gold btn-sm" id="acceptTeamInvite" type="button" style="margin-top:16px"><i data-lucide="user-round-plus"></i>Accept invitation</button>`);
+  show('Invitation ready',READ_ONLY_PREVIEW?'This single-use invitation would add your account to the team roster. Team changes are disabled in this production-connected preview.':'This single-use invitation will add your account to the team roster. Accept only if you trust the person who shared this link.',`<button class="btn btn-gold btn-sm" id="acceptTeamInvite" type="button" style="margin-top:16px"${READ_ONLY_PREVIEW?' disabled title="Changes are disabled in this production-connected preview."':''}><i data-lucide="user-round-plus"></i>Accept invitation</button>${READ_ONLY_PREVIEW?'<p class="team-empty preview-write-note" role="note">To accept invitations, open a writable staging environment.</p>':''}`);
   $('#acceptTeamInvite').onclick=async event=>{
+    if(READ_ONLY_PREVIEW)return;
     const button=event.currentTarget;button.disabled=true;
     try{
       const {data,error}=await SUPA.client.rpc('accept_team_invitation',{p_token:token});

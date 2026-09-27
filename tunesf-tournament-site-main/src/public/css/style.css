@@ -1,3 +1,6 @@
+@import "tailwindcss/theme" layer(theme);
+@import "tailwindcss/utilities" layer(utilities);
+
 /* ============ TOKENS ============ */
 :root{
   --bg:#060709; --bg2:#0a0d12; --panel:#0c0f15; --panel2:#0e1219;
@@ -7,6 +10,8 @@
   --fd:'Chakra Petch',sans-serif; --fb:'Barlow',sans-serif; --fm:'IBM Plex Mono',monospace;
 }
 *{margin:0;padding:0;box-sizing:border-box}
+/* Component display rules must never override the semantic hidden attribute. */
+[hidden]{display:none!important}
 html{scroll-behavior:smooth}
 body{background:var(--bg);color:var(--txt);font:400 15px/1.6 var(--fb);overflow-x:hidden;
   background-image:
@@ -208,6 +213,9 @@ body:has(.preview-notice){padding-top:128px}
 .t-card.flash{animation:flash 1.6s}
 @keyframes flash{0%,60%{border-color:var(--gold);box-shadow:0 0 0 1px var(--gold),0 0 40px rgba(245,180,0,.25)}}
 .t-media{position:relative;overflow:hidden;aspect-ratio:16/8;background:#000}
+.t-media.no-cover{isolation:isolate;background:radial-gradient(ellipse at 74% 42%,rgba(0,201,255,.13),transparent 44%),linear-gradient(118deg,#111820 0%,#090c11 56%,#191307 100%)}
+.t-media.no-cover::before{content:"";position:absolute;inset:0;z-index:0;background:repeating-linear-gradient(135deg,transparent 0 19px,rgba(255,255,255,.035) 20px,transparent 21px 38px),linear-gradient(90deg,transparent 49.8%,rgba(245,180,0,.12) 50%,transparent 50.2%);mask-image:linear-gradient(90deg,transparent,#000 30%,#000)}
+.t-media.no-cover::after{content:attr(data-game);position:absolute;top:50%;right:7%;z-index:1;max-width:78%;overflow:hidden;transform:translateY(-50%);color:rgba(245,180,0,.14);font:700 clamp(40px,12vw,82px)/.85 var(--fd);letter-spacing:.035em;text-align:right;text-overflow:clip;white-space:nowrap}
 .t-card.feat .t-media{aspect-ratio:auto;flex:1;min-height:280px}
 .t-media img{width:100%;height:100%;object-fit:cover;filter:grayscale(.75) contrast(1.15) brightness(.62);transition:transform .5s,filter .5s}
 .t-media .t-cover{position:absolute;inset:0;z-index:0;filter:brightness(.72) saturate(.95) contrast(1.04)}
@@ -231,8 +239,8 @@ body:has(.preview-notice){padding-top:128px}
 .t-prize b{font:600 20px/1.2 var(--fm);color:var(--gold)}
 .t-card.feat .t-prize b{font-size:26px}
 .t-prize b small{display:inline;font-size:11px;color:var(--dim);letter-spacing:.06em}
-.t-slots{max-height:0;overflow:hidden;transition:max-height .35s;margin-top:0}
-.t-card:hover .t-slots{max-height:44px;margin-top:12px}
+.t-slots{max-height:none;overflow:visible;transition:opacity .2s;margin-top:0}
+.t-card:hover .t-slots{margin-top:0}
 .slotbar{height:3px;background:rgba(255,255,255,.08);margin-top:7px}
 .slotbar i{display:block;height:100%;background:var(--cyan)}
 .t-slots span{font:500 10px/1 var(--fm);letter-spacing:.1em;color:var(--faint)}
@@ -571,8 +579,12 @@ footer{border-top:1px solid var(--line);padding:70px 0 34px;background:rgba(8,10
   .tgrid{grid-template-columns:1fr 1fr}
 }
 @media(max-width:1024px){
-  .nav-links{display:none;position:absolute;top:64px;left:0;right:0;flex-direction:column;background:rgba(8,10,14,.98);border-bottom:1px solid var(--line);padding:12px 20px 20px}
-  header.top.nav-open .nav-links{display:flex}
+  .nav-links{display:none;position:absolute;top:64px;left:0;right:0;flex-direction:column;gap:4px;background:rgba(8,10,14,.98);border-bottom:1px solid var(--line);padding:12px 20px 20px;box-shadow:0 18px 36px rgba(0,0,0,.35)}
+  header.top.nav-open .nav-links{display:flex;max-height:calc(100dvh - 110px);overflow-y:auto;overscroll-behavior:contain}
+  .nav-links>a,.nav-links>.nav-drop>button{min-height:44px;display:flex;align-items:center;padding:12px 14px}
+  .nav-drop{width:100%}.nav-drop>button{width:100%;justify-content:space-between}
+  .nav-drop .drop-menu{position:static;min-width:0;margin:0 0 6px 12px;border-left:2px solid rgba(245,180,0,.4);border-top:0;border-right:0;border-bottom:0;background:transparent}
+  .nav-links a::after{left:14px;right:auto;width:36px;bottom:5px}
   #burger{display:grid}
   .nav-cta .btn{display:none}
 }
@@ -614,3 +626,25 @@ footer{border-top:1px solid var(--line);padding:70px 0 34px;background:rgba(8,10
 body.preview-readonly{padding-top:34px}
 .preview-notice{position:fixed;z-index:70;top:98px;left:0;right:0;height:34px;display:flex;align-items:center;justify-content:center;padding:0 16px;background:#352b0f;color:#f5d477;text-align:center;font:600 11px/1.4 var(--fm);letter-spacing:.06em;border-bottom:1px solid rgba(245,180,0,.3)}
 @media(prefers-reduced-motion:reduce){body{padding-top:122px}body.preview-readonly{padding-top:58px}.preview-notice{top:122px}}
+
+
+/* Shared interaction and responsive navigation refinements */
+.btn-sm{min-height:40px}
+button:disabled,.btn[aria-disabled="true"]{cursor:not-allowed;opacity:.55;transform:none!important;filter:none!important}
+.nav-links .mobile-nav-actions{display:none}
+@media(max-width:1024px){
+  .nav-links .mobile-nav-actions{display:grid;gap:8px;margin:8px 0 0;padding:13px 8px 0;border-top:1px solid var(--line)}
+  .nav-links .mobile-nav-actions>a{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:46px;padding:11px 13px;border:1px solid var(--line2);color:var(--txt);font:600 11px/1.2 var(--fd);letter-spacing:.11em;text-transform:uppercase}
+  .nav-links .mobile-nav-actions>a svg{width:14px;height:14px;color:var(--gold)}
+  .nav-links .mobile-nav-actions>.mobile-nav-primary{border-color:rgba(245,180,0,.45);background:var(--gold);color:#090a0c}
+  .nav-links .mobile-nav-actions>.mobile-nav-primary svg{color:#090a0c}
+  .nav-links .mobile-nav-actions>.mobile-nav-secondary{background:rgba(255,255,255,.025)}
+}
+@media(prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto!important}
+  .ticker .tk{animation:none!important;transform:none!important;will-change:auto!important}
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important;transition-duration:.01ms!important}
+  .rv{opacity:1!important;transform:none!important}
+}
+
+@media(max-width:560px){.wiz{grid-template-columns:minmax(0,1fr)}.wiz>*{min-width:0}.wiz-main{min-width:0;padding:24px 20px}.wpane,.wpane>*{min-width:0}.wpane input,.wpane select,.wpane textarea{max-width:100%}}

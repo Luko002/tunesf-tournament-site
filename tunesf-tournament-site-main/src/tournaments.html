@@ -7,8 +7,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=Barlow:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/css/style.css?v=20260926c">
-<link rel="stylesheet" href="/css/pages.css?v=20260926e">
+<link rel="stylesheet" href="/css/style.css?v=20260927h">
+<link rel="stylesheet" href="/css/pages.css?v=20260927h">
 </head>
 <body>
 
@@ -24,21 +24,21 @@
 <section class="page-hero"><div class="wrap">
   <div class="crumbs"><a href="index.html">TUNESF</a><span>/</span><b>Tournaments</b></div>
   <div class="eyebrow">01 — Tournament Discovery</div>
-  <h1 class="ph-title">Open <span class="out2">Brackets</span></h1>
-  <p class="lead">Every competition under the federation banner — filtered by game, status and prize pool. Registration is verified by roster, not by honor system.</p>
+  <h1 class="ph-title">Tournament <span class="out2">Hub</span></h1>
+  <p class="lead">Browse federation events by game, registration status, and prize pool. Team entries are checked against the official roster before approval.</p>
 </div></section>
 
 <section class="sec tight"><div class="wrap">
   <div class="filters rv">
-    <div class="ftabs" id="gameTabs"></div>
+    <div class="ftabs" id="gameTabs" role="group" aria-label="Filter tournaments by game"></div>
     <div class="fsort">
-      <select id="statusSel">
+      <select id="statusSel" aria-label="Filter tournaments by status">
         <option value="all">ALL STATUS</option><option value="live">LIVE</option>
         <option value="reg">REGISTRATION OPEN</option><option value="soon">UPCOMING</option>
         <option value="closed">REGISTRATION CLOSED</option>
       </select>
       <button class="btn btn-line btn-sm" id="refreshTournaments" type="button"><i data-lucide="refresh-cw"></i>Refresh list</button>
-      <select id="sortSel">
+      <select id="sortSel" aria-label="Sort tournaments by">
         <option value="feat">SORT: FEATURED</option><option value="prize">SORT: PRIZE POOL</option><option value="teams">SORT: TEAM COUNT</option>
       </select>
     </div>
@@ -63,7 +63,7 @@
 <script src="https://unpkg.com/lucide@1.47.0/dist/umd/lucide.min.js" integrity="sha384-v15JX+vZHMR3T6LQR9N6e6wIKrKOdNTbdj8j+e5irqq3L9gCauJz2vGlUzomWyUp" crossorigin="anonymous"></script>
 <script>if(!window.lucide){document.write('<script src="https://cdn.jsdelivr.net/npm/lucide@1.47.0/dist/umd/lucide.min.js" integrity="sha384-v15JX+vZHMR3T6LQR9N6e6wIKrKOdNTbdj8j+e5irqq3L9gCauJz2vGlUzomWyUp" crossorigin="anonymous"><\/script>')}</script>
 <script src="/js/supabase-config.js?v=3"></script>
-<script src="/js/core.js?v=20260926g"></script>
+<script src="/js/core.js?v=20260927i"></script>
 <script src="/js/tournaments.js?v=20260925d"></script>
 </body>
 </html>

@@ -13,16 +13,22 @@ function renderT(){
   $('#tgrid').innerHTML=list.length
     ? list.map(tCardHTML).join('')
     : TOURN.length
-      ? '<p style="color:var(--faint);font:500 13px var(--fm);letter-spacing:.1em;padding:40px 0">No tournaments match these filters.</p>'
+      ? '<section class="t-filter-empty" aria-live="polite"><span>NO MATCHES FOUND</span><h2>No tournaments match those filters</h2><p>Try another game or status to find an event.</p><button class="btn btn-line btn-sm" type="button" data-clear-tournament-filters>Clear game and status filters</button></section>'
       : '<div class="dcard" style="grid-column:1/-1"><div class="dh">No tournaments yet</div><div class="db"><p>The federation has not published a tournament. Check back here for verified events.</p></div></div>';
   icons();
 }
 
 (function init(){
   const tabs=$('#gameTabs'); if(!tabs)return;
-  tabs.innerHTML=TABS.map(([k,l],i)=>`<button data-g="${k}"${i?'':' class="act"'}>${l}</button>`).join('');
+  tabs.innerHTML=TABS.map(([k,l],i)=>`<button type="button" data-g="${k}" aria-pressed="${i===0}"${i?'':' class="act"'}>${l}</button>`).join('');
   $$('#gameTabs button').forEach(b=>b.onclick=()=>{
-    $$('#gameTabs button').forEach(x=>x.classList.remove('act'));b.classList.add('act');FILT.game=b.dataset.g;renderT();});
+    $$('#gameTabs button').forEach(x=>{x.classList.toggle('act',x===b);x.setAttribute('aria-pressed',String(x===b));});FILT.game=b.dataset.g;renderT();});
+  $('#tgrid').addEventListener('click',event=>{
+    if(!event.target.closest('[data-clear-tournament-filters]'))return;
+    FILT.game='all';FILT.status='all';$('#statusSel').value='all';
+    $$('#gameTabs button').forEach(button=>{const selected=button.dataset.g==='all';button.classList.toggle('act',selected);button.setAttribute('aria-pressed',String(selected));});
+    renderT();$('#gameTabs button[data-g="all"]')?.focus();
+  });
   $('#statusSel').onchange=e=>{FILT.status=e.target.value;renderT();};
   $('#sortSel').onchange=e=>{FILT.sort=e.target.value;renderT();};
   $('#refreshTournaments').onclick=async event=>{

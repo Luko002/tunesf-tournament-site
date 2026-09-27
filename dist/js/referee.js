@@ -6,6 +6,19 @@ Auth.ready.then(async()=>{
   const date=value=>value?new Intl.DateTimeFormat(undefined,{dateStyle:'medium',timeStyle:'short'}).format(new Date(value)):'Unscheduled';
   panel.innerHTML='<div id="refereeQueue" class="team-empty" style="grid-column:1/-1">Loading assigned matches...</div>';
   const queue=$('#refereeQueue');
+  function applyPreviewWriteState(){
+    if(!READ_ONLY_PREVIEW)return;
+    panel.querySelectorAll('[data-referee-action],[data-review-result],[data-referee-result]').forEach(control=>{
+      if(control.matches('form'))control.querySelectorAll('input,select,textarea,button').forEach(input=>input.disabled=true);
+      else control.disabled=true;
+      control.setAttribute('title','Changes are disabled in this production-connected preview.');
+    });
+    if(!panel.querySelector('[data-preview-write-note]')){
+      const note=document.createElement('p');note.className='team-empty preview-write-note';note.dataset.previewWriteNote='';note.setAttribute('role','note');
+      note.textContent='Referee actions and official score changes are disabled in this production-connected preview. Match details and evidence remain available to review.';
+      panel.prepend(note);
+    }
+  }
   async function render(){
     queue.innerHTML='Loading assigned matches...';
     const [assignmentResult,staffResult]=await Promise.all([
@@ -15,7 +28,7 @@ Auth.ready.then(async()=>{
     if(assignmentResult.error)throw assignmentResult.error;if(staffResult.error)throw staffResult.error;
     const ids=[...new Set((assignmentResult.data||[]).map(a=>a.match_id))];
     const tournamentIds=[...new Set((staffResult.data||[]).map(s=>s.tournament_id))];
-    if(!ids.length&&!tournamentIds.length){queue.innerHTML='<div class="dcard" style="grid-column:1/-1"><div class="dh"><i data-lucide="gavel"></i>Referee assignments</div><div class="db"><p class="team-empty">You have no assigned matches or tournaments.</p></div></div>';icons();return;}
+    if(!ids.length&&!tournamentIds.length){queue.innerHTML='<div class="dcard" style="grid-column:1/-1"><div class="dh"><i data-lucide="gavel"></i>Referee assignments</div><div class="db"><section class="referee-empty" aria-labelledby="refereeEmptyTitle"><span class="event-hub-kicker">NOTHING IN THE QUEUE</span><h2 id="refereeEmptyTitle">No assignments yet</h2><p>When an organizer assigns you to a tournament or match, your schedule and referee actions will appear here.</p><a class="btn btn-line btn-sm" href="tournaments.html">Browse tournaments <i data-lucide="arrow-right" aria-hidden="true"></i></a></section></div></div>';icons();return;}
     const columns='id,tournament_id,home_registration_id,away_registration_id,status,home_score,away_score,scheduled_at,round_number';
     const [matchResult,eventMatchResult]=await Promise.all([
       ids.length?SUPA.client.from('tournament_matches').select(columns).in('id',ids):{data:[],error:null},
@@ -64,11 +77,11 @@ Auth.ready.then(async()=>{
       const evidenceHtml=evidence.length?`<h3 class="team-section-title">Match evidence <span>${evidence.length}</span></h3><ul class="team-invites">${evidence.map(row=>`<li class="event-reg"><span><b>${esc(row.mime_type)}</b><small>${fmt(row.byte_size)} bytes · ${esc(date(row.created_at))}</small></span><a class="btn btn-line btn-sm" href="${esc(row.url)}" target="_blank" rel="noopener noreferrer">Open evidence</a></li>`).join('')}</ul>`:'<p class="team-empty">No evidence attached.</p>';
       const scoreForm=match.home_registration_id&&match.away_registration_id&&['ready','live','paused','result_pending','completed'].includes(match.status)?`<form class="event-op-form" data-referee-result="${esc(match.id)}"><label>Home wins<input type="number" name="home_score" min="0" max="4" value="${match.home_score??''}" required></label><label>Away wins<input type="number" name="away_score" min="0" max="4" value="${match.away_score??''}" required></label><label class="event-op-reason">Reason for official result<input name="reason" minlength="5" maxlength="500" placeholder="e.g. Verified final series score" required></label><button class="btn btn-gold btn-sm" type="submit">${match.status==='completed'?'Correct result':'Mark match over &amp; save result'}</button></form>`:'';
       return `<article class="dcard event-card"><div class="dh"><i data-lucide="gavel"></i>${esc(tournament?.name||'Tournament')}<span class="mono-r">${esc(match.status.replaceAll('_',' ').toUpperCase())}</span></div><div class="db"><div class="team-meta"><span>${esc(GAMES[tournament?.game]?.label||tournament?.game||'Game unavailable')}</span><span>Round ${match.round_number}</span><span>${esc(tournament?.best_of||'Series format unavailable')}</span><span>${esc(date(match.scheduled_at))}</span></div><h3 class="team-section-title">${label(match.home_registration_id)} vs ${label(match.away_registration_id)}</h3><p class="event-next-step">${esc(nextTask)}</p><div class="event-actions">${actionButton}<a class="btn btn-line btn-sm" href="match-room.html?id=${encodeURIComponent(match.id)}">Open match room</a>${incidentLink}</div>${evidenceHtml}${results}${scoreForm}</div></article>`;
-    }).join('');icons();
+    }).join('');applyPreviewWriteState();icons();
   }
   panel.addEventListener('click',async event=>{
     const action=event.target.closest('[data-referee-action]');
-    const review=event.target.closest('[data-review-result]');const button=action||review;if(!button)return;button.disabled=true;
+    const review=event.target.closest('[data-review-result]');const button=action||review;if(!button)return;if(READ_ONLY_PREVIEW)return;button.disabled=true;
     try{
       const result=action
         ?await SUPA.client.rpc('referee_match',{p_match_id:action.dataset.match,p_action:action.dataset.refereeAction,p_note:''})
@@ -78,7 +91,7 @@ Auth.ready.then(async()=>{
   });
   panel.addEventListener('submit',async event=>{
     const form=event.target.closest('[data-referee-result]');if(!form)return;
-    event.preventDefault();if(!form.reportValidity()||!window.confirm('Mark this match over with the entered official score? The bracket or standings may advance.'))return;
+    event.preventDefault();if(READ_ONLY_PREVIEW)return;if(!form.reportValidity()||!window.confirm('Mark this match over with the entered official score? The bracket or standings may advance.'))return;
     const button=form.querySelector('button[type="submit"]'),values=new FormData(form);button.disabled=true;
     try{
       const {error}=await SUPA.client.rpc('record_official_match_result',{p_match_id:form.dataset.refereeResult,p_home_score:Number(values.get('home_score')),p_away_score:Number(values.get('away_score')),p_reason:String(values.get('reason')||'').trim()});

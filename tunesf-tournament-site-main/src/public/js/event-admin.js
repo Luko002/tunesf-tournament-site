@@ -4,7 +4,32 @@ Auth.ready.then(async()=>{
   buildConsoleStrip();
   const host=$('#eventList');
   const seedOrders=new Map();
+  const playoffSeedOrders=new Map();
   const selectedTabs=new Map();
+  const searchInput=$('#eventSearch'),statusFilter=$('#eventStatusFilter'),resultsCount=$('#eventResultsCount'),filterEmpty=$('#eventFilterEmpty');
+  function applyEventFilters(){
+    const query=(searchInput?.value||'').trim().toLocaleLowerCase();
+    const status=statusFilter?.value||'all';
+    const cards=[...host.querySelectorAll('[data-event-card]')];let shown=0;
+    cards.forEach(card=>{const matchesText=!query||card.textContent.toLocaleLowerCase().includes(query);const matchesStatus=status==='all'||card.dataset.eventStatus===status;const visible=matchesText&&matchesStatus;card.hidden=!visible;if(visible)shown++;});
+    if(resultsCount)resultsCount.textContent=cards.length?`Showing ${shown} of ${cards.length} tournaments`:'No tournaments assigned';
+    if(filterEmpty)filterEmpty.hidden=cards.length===0||shown>0;
+  }
+  function applyPreviewWriteState(){
+    if(!READ_ONLY_PREVIEW)return;
+    host.querySelectorAll('[data-event-action],form[data-standing-form],form[data-match-schedule],form[data-match-result],[data-referee-select]').forEach(control=>{
+      if(control.matches('form'))control.querySelectorAll('input,select,textarea,button').forEach(input=>input.disabled=true);
+      else control.disabled=true;
+      control.setAttribute('title','Changes are disabled in this production-connected preview.');
+    });
+    host.querySelectorAll('[data-event-card]').forEach(card=>{
+      if(card.querySelector('[data-preview-write-note]'))return;
+      const note=document.createElement('p');note.className='team-empty preview-write-note';note.dataset.previewWriteNote='';note.setAttribute('role','note');
+      note.textContent='Tournament changes are disabled in this production-connected preview. You can still review registrations, matches, standings, referee assignments, and seed order.';
+      card.querySelector('.db')?.prepend(note);
+    });
+  }
+  searchInput?.addEventListener('input',applyEventFilters);statusFilter?.addEventListener('change',applyEventFilters);
   const setError=error=>{host.innerHTML=`<div class="dcard" style="grid-column:1/-1"><div class="dh">Could not load tournament operations</div><div class="db"><p>${esc(error?.message||'Please try again.')}</p></div></div>`;};
   const date=value=>value?new Intl.DateTimeFormat(undefined,{dateStyle:'medium',timeStyle:'short'}).format(new Date(value)):'Date to be announced';
   const localDateTime=value=>{if(!value)return '';const d=new Date(value);return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,16);};
@@ -68,11 +93,27 @@ Auth.ready.then(async()=>{
         else actions.push('<p class="team-empty">Double elimination currently requires 4 or more approved teams in a power-of-two field. Adjust registrations or choose another format before publishing.</p>');
       }
       if(event.status==='registration_closed'&&hasPublished)actions.push('<button class="btn btn-gold btn-sm" data-event-action="transition" data-event="'+esc(event.id)+'" data-status="in_progress">Start tournament</button>');
-      const rrDone=event.format==='round_robin_playoffs'&&stages.some(s=>s.stage_number===1&&s.format==='round_robin'&&s.status==='completed');
-      const playoffsExist=stages.some(s=>s.stage_number>1);
-      if(event.status==='in_progress'&&rrDone&&!playoffsExist){
-        const options=[2,4,8,16,32,64].filter(n=>n<=approved.length).map(n=>`<option value="${n}"${n===Math.min(4,2**Math.floor(Math.log2(approved.length)))?' selected':''}>Top ${n}</option>`).join('');
-        actions.push(`<label class="event-qualifiers">Playoff qualifiers <select data-qualifiers="${esc(event.id)}">${options}</select></label><button class="btn btn-gold btn-sm" data-event-action="generate_playoff_stage" data-event="${esc(event.id)}">Generate playoff stage</button>`);
+      const rrStage=stages.find(s=>s.stage_number===1&&s.format==='round_robin');
+      const playoffStage=stages.find(s=>s.stage_number>1);
+      const canPreparePlayoffs=event.format==='round_robin_playoffs'&&event.status==='in_progress'&&rrStage&&['published','in_progress','completed'].includes(rrStage.status);
+      const qualifierCount=Math.max(2,Number(event.playoff_qualifier_count)||4);
+      const byeCount=Math.max(0,Number(event.playoff_bye_count)||0);
+      const playoffDraftNoticeId=`playoffDraftReadOnlyNotice-${event.id}`;
+      const playoffDraftReadOnly=READ_ONLY_PREVIEW?` disabled title="Changes are disabled in this production preview." aria-describedby="${esc(playoffDraftNoticeId)}"`:'';
+      const playoffDraftReadOnlyNotice=canPreparePlayoffs&&READ_ONLY_PREVIEW?`<p id="${esc(playoffDraftNoticeId)}" class="team-empty preview-write-note" role="note">Playoff draft actions are unavailable in this production-connected preview. Open a writable staging environment to prepare, refresh, or publish this bracket.</p>`:'';
+      const rrSeedings=standings.filter(row=>row.stage_id===rrStage?.id).sort((a,b)=>a.rank-b.rank||a.registration_id.localeCompare(b.registration_id));
+      if(canPreparePlayoffs&&!playoffStage){
+        if(approved.length>=qualifierCount)actions.push(`<div class="event-playoff-config"><span><b>TOP ${qualifierCount}</b><small>ADVANCE FROM THE CURRENT STANDINGS</small></span><span><b>${byeCount} BYE${byeCount===1?'':'S'}</b><small>TOP SEED${byeCount===1?'':'S'} SKIP THE OPENING ROUND</small></span></div>${playoffDraftReadOnlyNotice}<button class="btn btn-gold btn-sm" data-event-action="prepare_playoff_stage" data-event="${esc(event.id)}"${playoffDraftReadOnly}>Prepare playoff draft</button><p class="team-empty">The round robin can continue while the playoff draft is prepared.</p>`);
+        else actions.push(`<p class="team-empty">The playoff is set for ${qualifierCount} qualifiers, but only ${approved.length} teams are approved. Approve enough teams before preparing it.</p>`);
+      }
+      if(canPreparePlayoffs&&playoffStage?.status==='draft'){
+        const draftIds=rrSeedings.slice(0,qualifierCount).map(row=>row.registration_id);
+        const seedOrder=playoffSeedOrders.get(event.id)||draftIds;
+        const normalizedOrder=seedOrder.filter(registrationId=>draftIds.includes(registrationId));
+        for(const registrationId of draftIds)if(!normalizedOrder.includes(registrationId))normalizedOrder.push(registrationId);
+        playoffSeedOrders.set(event.id,normalizedOrder);
+        const playoffSeedRows=normalizedOrder.map((registrationId,index)=>{const row=approved.find(r=>r.id===registrationId);return `<li><span><b>Seed ${index+1}</b> ${esc(row?.team?.name||'Team unavailable')}${index<byeCount?'<small class="event-seed-bye">FIRST-ROUND BYE</small>':''}</span><span><button class="btn btn-line btn-sm" type="button" aria-label="Move ${esc(row?.team?.name||'team')} up" data-event-action="playoff_seed_move" data-event="${esc(event.id)}" data-registration="${esc(registrationId)}" data-direction="-1"${index===0?' disabled':''}>↑</button><button class="btn btn-line btn-sm" type="button" aria-label="Move ${esc(row?.team?.name||'team')} down" data-event-action="playoff_seed_move" data-event="${esc(event.id)}" data-registration="${esc(registrationId)}" data-direction="1"${index===normalizedOrder.length-1?' disabled':''}>↓</button></span></li>`;}).join('');
+        actions.push(`<section class="event-admin-tools event-playoff-seeds"><h3 class="team-section-title">Playoff seed order <small>Seeds 1–${byeCount} receive the opening-round bye. Change the order before publishing. Refresh after changing standings.</small></h3>${playoffDraftReadOnlyNotice}<ol class="event-seed-list">${playoffSeedRows}</ol><div class="event-actions"><button class="btn btn-line btn-sm" data-event-action="prepare_playoff_stage" data-event="${esc(event.id)}"${playoffDraftReadOnly}>Refresh seeds from standings</button><button class="btn btn-gold btn-sm" data-event-action="publish_playoff_stage" data-event="${esc(event.id)}"${playoffDraftReadOnly}>Publish playoff bracket</button></div></section>`);
       }
       if(event.status==='in_progress')actions.push('<button class="btn btn-line btn-sm" data-event-action="transition" data-event="'+esc(event.id)+'" data-status="completed">Complete tournament</button>');
       const seedRows=event.status==='registration_closed'&&!hasPublished&&approved.length>=2?`<section class="event-admin-tools"><h3 class="team-section-title">Bracket seed order <small>Move teams before publishing</small></h3><ol class="event-seed-list">${seedOrder.map((registrationId,index)=>{const row=approved.find(r=>r.id===registrationId);return `<li><span><b>Seed ${index+1}</b> ${esc(row?.team?.name||'Team unavailable')}</span><span><button class="btn btn-line btn-sm" type="button" aria-label="Move ${esc(row?.team?.name||'team')} up" data-event-action="seed_move" data-event="${esc(event.id)}" data-registration="${esc(registrationId)}" data-direction="-1"${index===0?' disabled':''}>↑</button><button class="btn btn-line btn-sm" type="button" aria-label="Move ${esc(row?.team?.name||'team')} down" data-event-action="seed_move" data-event="${esc(event.id)}" data-registration="${esc(registrationId)}" data-direction="1"${index===seedOrder.length-1?' disabled':''}>↓</button></span></li>`;}).join('')}</ol></section>`:'';
@@ -90,14 +131,18 @@ Auth.ready.then(async()=>{
         const home=registrationById.get(match.home_registration_id)?.team?.name||'Team pending';
         const away=registrationById.get(match.away_registration_id)?.team?.name||'Team pending';
         const stage=stages.find(row=>row.id===match.stage_id);
-        const refereeAction={ready:'start',live:'pause',paused:'resume'}[match.status];
+        const scheduledTimePassed=['pending','ready'].includes(match.status)&&match.scheduled_at&&new Date(match.scheduled_at).getTime()<Date.now();
+        const matchStatusLabel=scheduledTimePassed?'reschedule needed':match.status.replaceAll('_',' ');
+        const refereeAction={ready:scheduledTimePassed?null:'start',live:'pause',paused:'resume'}[match.status];
         const scoreEnabled=match.home_registration_id&&match.away_registration_id&&['ready','live','paused','result_pending','completed'].includes(match.status);
-        return `<article class="event-op-match"><div class="event-op-match-head"><b>${esc(home)} <span>vs</span> ${esc(away)}</b><small>${esc(stage?.name||'Stage')} · Round ${match.round_number} · Match ${match.position} · ${esc(match.status.replaceAll('_',' '))}</small></div><div class="event-op-match-actions"><a class="btn btn-line btn-sm" href="match-room.html?id=${encodeURIComponent(match.id)}">Open match room</a>${refereeAction?`<button class="btn btn-line btn-sm" type="button" data-event-action="match_status" data-event="${esc(event.id)}" data-match="${esc(match.id)}" data-status="${refereeAction}">${refereeAction[0].toUpperCase()+refereeAction.slice(1)} match</button>`:''}</div>${['pending','ready'].includes(match.status)?`<form class="event-op-form" data-match-schedule="${esc(match.id)}"><label>Match time<input type="datetime-local" name="scheduled_at" value="${esc(localDateTime(match.scheduled_at))}" required></label><button class="btn btn-line btn-sm" type="button" data-event-action="schedule_match" data-event="${esc(event.id)}">Save time</button></form>`:`<p class="team-empty">${esc(date(match.scheduled_at))}</p>`}${scoreEnabled?`<form class="event-op-form" data-match-result="${esc(match.id)}"><label>Home wins<input type="number" name="home_score" min="0" max="4" value="${match.home_score??''}" required></label><label>Away wins<input type="number" name="away_score" min="0" max="4" value="${match.away_score??''}" required></label><label class="event-op-reason">Reason for official result<input name="reason" minlength="5" maxlength="500" placeholder="e.g. Referee verified the final score" required></label><button class="btn btn-gold btn-sm" type="button" data-event-action="record_result" data-event="${esc(event.id)}">${match.status==='completed'?'Correct result':'Mark match over &amp; save result'}</button></form>`:''}</article>`;
+        return `<article class="event-op-match"><div class="event-op-match-head"><b>${esc(home)} <span>vs</span> ${esc(away)}</b><small>${esc(stage?.name||'Stage')} · Round ${match.round_number} · Match ${match.position} · ${esc(matchStatusLabel)}</small></div>${scheduledTimePassed?'<p class="event-match-time-warning" role="status">Scheduled time passed. Confirm a new time with both teams before starting this match.</p>':''}<div class="event-op-match-actions"><a class="btn btn-line btn-sm" href="match-room.html?id=${encodeURIComponent(match.id)}">Open match room</a>${refereeAction?`<button class="btn btn-line btn-sm" type="button" data-event-action="match_status" data-event="${esc(event.id)}" data-match="${esc(match.id)}" data-status="${refereeAction}">${refereeAction[0].toUpperCase()+refereeAction.slice(1)} match</button>`:''}</div>${['pending','ready'].includes(match.status)?`<form class="event-op-form" data-match-schedule="${esc(match.id)}"><label>Match time<input type="datetime-local" name="scheduled_at" value="${esc(localDateTime(match.scheduled_at))}" required></label><button class="btn btn-line btn-sm" type="button" data-event-action="schedule_match" data-event="${esc(event.id)}">Save time</button></form>`:`<p class="team-empty">${esc(date(match.scheduled_at))}</p>`}${scoreEnabled?`<form class="event-op-form" data-match-result="${esc(match.id)}"><label>Home wins<input type="number" name="home_score" min="0" max="4" value="${match.home_score??''}" required></label><label>Away wins<input type="number" name="away_score" min="0" max="4" value="${match.away_score??''}" required></label><label class="event-op-reason">Reason for official result<input name="reason" minlength="5" maxlength="500" placeholder="e.g. Referee verified the final score" required></label><button class="btn btn-gold btn-sm" type="button" data-event-action="record_result" data-event="${esc(event.id)}">${match.status==='completed'?'Correct result':'Mark match over &amp; save result'}</button></form>`:''}</article>`;
       }).join('')||'<p class="team-empty">Matches appear here after the bracket is published.</p>';
       const selected=selectedTabs.get(event.id)||(!matches.length?'registrations':'matches');
       const tabs=[['registrations','Registrations'],['matches',`Matches (${matches.length})`],['standings','Standings'],['officials','Referee'],['event','Event']];
-      return `<article class="dcard event-card event-ops-card" data-event-card="${esc(event.id)}"><div class="dh"><i data-lucide="trophy"></i>${esc(event.name)}<span class="mono-r">${esc(event.status.replaceAll('_',' ').toUpperCase())}</span></div><div class="db"><div class="team-meta"><span>${esc(GAMES[event.game]?.label||event.game)}</span><span>${esc(String(event.format).replaceAll('_',' '))}</span><span>Starts ${esc(date(event.starts_at))}</span><span>${approved.length}/${regs.length} approved</span></div><nav class="event-ops-tabs" aria-label="Tournament operations sections">${tabs.map(([key,label])=>`<button type="button" data-ops-tab="${key}" aria-pressed="${key===selected}" class="${key===selected?'active':''}">${label}</button>`).join('')}</nav><section class="event-ops-panel" data-ops-panel="registrations"${selected!=='registrations'?' hidden':''}><h3 class="team-section-title">Team registrations <span>${pending.length} pending</span></h3><ul class="team-invites">${regRows}</ul>${seedRows}</section><section class="event-ops-panel" data-ops-panel="matches"${selected!=='matches'?' hidden':''}><h3 class="team-section-title">Match schedule and results <span>${matches.length}</span></h3>${matchRows}</section><section class="event-ops-panel" data-ops-panel="standings"${selected!=='standings'?' hidden':''}><div class="event-standings-scroll">${standingsControls||'<p class="team-empty">This tournament has no round robin stage.</p>'}</div></section><section class="event-ops-panel" data-ops-panel="officials"${selected!=='officials'?' hidden':''}>${refereeControl}</section><section class="event-ops-panel" data-ops-panel="event"${selected!=='event'?' hidden':''}>${stages.length?`<p class="team-empty">Stages: ${stages.map(s=>`${esc(s.name)} · ${esc(s.format.replaceAll('_',' '))} · ${esc(s.status)}`).join(' / ')}</p>`:''}<div class="event-actions">${actions.join('')}</div></section></div></article>`;
+      return `<article class="dcard event-card event-ops-card" data-event-card="${esc(event.id)}" data-event-status="${esc(event.status)}"><div class="dh"><i data-lucide="trophy"></i>${esc(event.name)}<span class="mono-r">${esc(event.status.replaceAll('_',' ').toUpperCase())}</span></div><div class="db"><div class="team-meta"><span>${esc(GAMES[event.game]?.label||event.game)}</span><span>${esc(String(event.format).replaceAll('_',' '))}</span><span>Starts ${esc(date(event.starts_at))}</span><span>${approved.length}/${regs.length} approved</span></div><nav class="event-ops-tabs" aria-label="Tournament operations sections">${tabs.map(([key,label])=>`<button type="button" data-ops-tab="${key}" aria-pressed="${key===selected}" class="${key===selected?'active':''}">${label}</button>`).join('')}</nav><section class="event-ops-panel" data-ops-panel="registrations"${selected!=='registrations'?' hidden':''}><h3 class="team-section-title">Team registrations <span>${pending.length} pending</span></h3><ul class="team-invites">${regRows}</ul>${seedRows}</section><section class="event-ops-panel" data-ops-panel="matches"${selected!=='matches'?' hidden':''}><h3 class="team-section-title">Match schedule and results <span>${matches.length}</span></h3>${matchRows}</section><section class="event-ops-panel" data-ops-panel="standings"${selected!=='standings'?' hidden':''}><div class="event-standings-scroll">${standingsControls||'<p class="team-empty">This tournament has no round robin stage.</p>'}</div></section><section class="event-ops-panel" data-ops-panel="officials"${selected!=='officials'?' hidden':''}>${refereeControl}</section><section class="event-ops-panel" data-ops-panel="event"${selected!=='event'?' hidden':''}>${stages.length?`<p class="team-empty">Stages: ${stages.map(s=>`${esc(s.name)} · ${esc(s.format.replaceAll('_',' '))} · ${esc(s.status)}`).join(' / ')}</p>`:''}<div class="event-actions">${actions.join('')}</div></section></div></article>`;
     }).join('');
+    applyPreviewWriteState();
+    applyEventFilters();
     icons();
   }
   host.addEventListener('click',async event=>{
@@ -109,6 +154,7 @@ Auth.ready.then(async()=>{
       return;
     }
     const button=event.target.closest('[data-event-action]');if(!button)return;
+    if(READ_ONLY_PREVIEW)return;
     const matchForm=button.closest('[data-match-schedule],[data-match-result]');
     if(matchForm&&!matchForm.reportValidity())return;
     button.disabled=true;const id=button.dataset.event,action=button.dataset.eventAction;
@@ -117,6 +163,10 @@ Auth.ready.then(async()=>{
       if(action==='seed_move'){
         const order=seedOrders.get(id)||[],at=order.indexOf(button.dataset.registration),next=at+Number(button.dataset.direction);
         if(at>=0&&next>=0&&next<order.length){[order[at],order[next]]=[order[next],order[at]];seedOrders.set(id,order);await render();return;}
+      }
+      else if(action==='playoff_seed_move'){
+        const order=playoffSeedOrders.get(id)||[],at=order.indexOf(button.dataset.registration),next=at+Number(button.dataset.direction);
+        if(at>=0&&next>=0&&next<order.length){[order[at],order[next]]=[order[next],order[at]];playoffSeedOrders.set(id,order);await render();return;}
       }
       else if(action==='save_referee'||action==='clear_referee'){
         const select=host.querySelector(`[data-referee-select="${CSS.escape(id)}"]`);
@@ -154,12 +204,12 @@ Auth.ready.then(async()=>{
         if(!window.confirm(`Publish the bracket for ${tournamentName} with ${ordered.length} approved teams in the seed order shown? This creates the tournament matches and locks registration decisions.`)){button.disabled=false;return;}
         result=await SUPA.client.rpc('generate_bracket',{p_tournament_id:id,p_seeded_registration_ids:ordered});
       }
-      else if(action==='generate_playoff_stage'){
-        const qualifiers=host.querySelector(`[data-qualifiers="${CSS.escape(id)}"]`);
-        const qualifierCount=Number(qualifiers?.value||4);
-        const tournamentName=button.closest('[data-event-card]')?.querySelector('.dh')?.childNodes[1]?.textContent?.trim()||'this tournament';
-        if(!window.confirm(`Generate the ${qualifierCount}-team playoff bracket for ${tournamentName}? This publishes playoff matches using the current round-robin standings.`)){button.disabled=false;return;}
-        result=await SUPA.client.rpc('generate_playoff_stage',{p_tournament_id:id,p_qualifier_count:qualifierCount});
+      else if(action==='prepare_playoff_stage')result=await SUPA.client.rpc('prepare_playoff_stage',{p_tournament_id:id});
+      else if(action==='publish_playoff_stage'){
+        const order=playoffSeedOrders.get(id)||[];
+        if(order.length<2)throw new Error('The playoff seed list is incomplete. Refresh the draft and try again.');
+        if(!window.confirm(`Publish the ${order.length}-team playoff bracket using the seed order shown? The round robin will remain open.`)){button.disabled=false;return;}
+        result=await SUPA.client.rpc('publish_playoff_stage',{p_tournament_id:id,p_seeded_registration_ids:order});
       }
       else if(action==='reopen_registration')result=await SUPA.client.rpc('reopen_tournament_registration',{p_tournament_id:id});
       if(result?.error)throw result.error;
