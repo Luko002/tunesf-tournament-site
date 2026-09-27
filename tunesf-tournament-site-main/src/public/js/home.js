@@ -128,4 +128,3 @@ boot(async()=>{
   setInterval(()=>{if(!document.hidden)void refreshMatches();},15000);
   document.addEventListener('visibilitychange',()=>{if(!document.hidden)void refreshMatches();});
 });
-

@@ -45,4 +45,3 @@ async function loadPublicProfile(){
   icons();
 }
 Auth.ready.then(loadPublicProfile).catch(error=>{console.error('Public profile unavailable:',error);const subtitle=$('#profileSubtitle'),host=$('#profileContent');if(subtitle)subtitle.textContent='Profile information is unavailable right now.';if(host)host.innerHTML=`<div class="team-empty">Profile information could not be loaded. ${esc(error.message||'Please try again later.')}<p><a class="btn btn-line btn-sm" href="clubs.html">Browse clubs &amp; teams</a></p></div>`;});
-

@@ -119,4 +119,3 @@ Auth.ready.then(async()=>{
   buildConsoleStrip();
   try{await render();}catch(error){list.innerHTML='<div class="team-empty">Your organization records could not be loaded.</div>';fail('Organization workspace unavailable',error);}
 }).catch(error=>toast('err','Organization workspace unavailable',error?.message||'Please reload and try again.'));
-

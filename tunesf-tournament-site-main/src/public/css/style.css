@@ -652,3 +652,4 @@ button:disabled,.btn[aria-disabled="true"]{cursor:not-allowed;opacity:.55;transf
 
 @media(max-width:560px){.wiz{grid-template-columns:minmax(0,1fr)}.wiz>*{min-width:0}.wiz-main{min-width:0;padding:24px 20px}.wpane,.wpane>*{min-width:0}.wpane input,.wpane select,.wpane textarea{max-width:100%}}
 
+.t-card{color:var(--txt);text-decoration:none}.t-card:focus-visible{outline:2px solid var(--gold);outline-offset:3px}

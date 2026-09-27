@@ -196,9 +196,8 @@ async function loadPublicData(){
 function boot(fn){Auth.ready.then(async()=>{if(!DEMO_MODE&&['index.html','tournaments.html'].includes(currentPage()))await loadPublicData();if(DEMO_MODE)renderDemoData();return fn()}).catch(e=>{console.error('Startup failed:',e);toast('err','Could not load the site',String(e?.message||e));});}
 function requirePerm(perm){if(Auth.has(perm))return true;const role=ROLE_FOR_PERM[perm]||'PLAYER';const next=currentPage();location.replace('login.html?next='+encodeURIComponent(next)+'&need='+encodeURIComponent(role));return false;}
 
-const TMODAL_HTML=`<div class="overlay" id="tmodal"><div class="modal cut"><div class="cut-in"><button class="iconbtn m-close" id="mClose" aria-label="Close"><i data-lucide="x"></i></button><img class="m-img" id="mImg" alt=""><div class="m-content"><div class="m-chips" id="mChips"></div><h2 id="mName"></h2><p id="mDesc"></p><div class="m-info"><div><small>Prize pool</small><b id="mPrize"></b></div><div><small>Approved teams</small><b id="mTeams"></b></div><div><small>Starts</small><b id="mDates"></b></div><div><small>Format</small><b id="mFmt"></b></div><div><small>Region</small><b id="mLoc"></b></div><div><small>Organizer</small><b id="mOrg"></b></div></div><label id="mTeamWrap" hidden style="display:block;margin:14px 0"><span>Choose your team</span><select id="mTeam"></select></label><p class="preview-write-note m-reg-readonly" id="mRegReadonly" role="note" hidden>Team registration is disabled in this local preview because it is connected to production data. Open a writable staging site to submit a team entry.</p><div class="m-acts"><button class="btn btn-gold" id="mReg" type="button">Register a team</button><a class="btn btn-line" href="tournaments.html" id="mBracket">Open tournament page</a></div></div></div></div></div>`;
 (function injectShell(){
-  document.body.insertAdjacentHTML('beforeend',`<div id="toasts"></div>${TMODAL_HTML}`);
+  document.body.insertAdjacentHTML('beforeend','<div id="toasts"></div>');
   const ticker=document.createElement('div');ticker.className='ticker';ticker.setAttribute('role','region');ticker.setAttribute('aria-label','TUNESF federation updates');
   const updates=['TEST 2026','LEAGUE OF LEGENDS ', 'REGISTRATION IS OPEN','MORE GAMES','BIGGER CASH PRIZE'];
   const tickerItems=updates.map(text=>`<span>${text}<i class="g">◆</i></span>`).join('');
@@ -290,35 +289,6 @@ function tCardHTML(t){
   const badge={live:'In progress',reg:'Registration open',soon:'Upcoming',closed:'Registration closed'}[t.status]||'Status unavailable';
   const filled=t.max?Math.min(100,Math.round(t.teams/t.max*100)):0;
   const progress=t.max?`role="progressbar" aria-label="Approved team slots filled" aria-valuemin="0" aria-valuemax="${t.max}" aria-valuenow="${Math.min(t.teams,t.max)}"`:'aria-hidden="true"';
-  return `<article class="t-card" data-t="${esc(t.id)}"><div class="t-media ${t.cover?'has-cover':'no-cover'}" data-game="${esc(t.game||'')}">${t.cover?`<img class="t-cover" src="${esc(t.cover)}" alt="" loading="lazy" decoding="async">`:''}<div class="t-scrim"></div><div class="t-tags"><span class="chip">${esc(t.org)}</span><span class="badge ${t.status==='live'?'live':t.status==='reg'?'reg':''}">${badge}</span></div><span class="t-game">${esc(GAMES[t.game]?.label||t.game||'Game to be announced')}</span></div><div class="t-body"><div class="t-top"><span>${esc(t.loc)}</span><span>${esc(t.when)}</span></div><h3>${esc(t.name)}</h3><p class="t-desc">${esc(t.desc)}</p><div class="t-meta"><span>${esc(t.fmt)}</span></div><div class="t-slots"><span>${t.max?`${t.teams} approved of ${t.max} slots`: 'Capacity to be announced'}</span><div class="slotbar" ${progress}><i style="width:${filled}%"></i></div></div><div class="t-foot"><div class="t-prize"><small>Prize pool</small><b>${fmt(t.prize)} <small>${esc(t.currency)}</small></b></div><a class="btn btn-line btn-sm" data-tournament-detail href="tournament.html?id=${encodeURIComponent(t.id)}">Details</a></div></div></article>`;
+  return `<a class="t-card" data-t="${esc(t.id)}" href="tournament.html?id=${encodeURIComponent(t.id)}" aria-label="View ${esc(t.name)} tournament"><div class="t-media ${t.cover?'has-cover':'no-cover'}" data-game="${esc(t.game||'')}">${t.cover?`<img class="t-cover" src="${esc(t.cover)}" alt="" loading="lazy" decoding="async">`:''}<div class="t-scrim"></div><div class="t-tags"><span class="chip">${esc(t.org)}</span><span class="badge ${t.status==='live'?'live':t.status==='reg'?'reg':''}">${badge}</span></div><span class="t-game">${esc(GAMES[t.game]?.label||t.game||'Game to be announced')}</span></div><div class="t-body"><div class="t-top"><span>${esc(t.loc)}</span><span>${esc(t.when)}</span></div><h3>${esc(t.name)}</h3><p class="t-desc">${esc(t.desc)}</p><div class="t-meta"><span>${esc(t.fmt)}</span></div><div class="t-slots"><span>${t.max?`${t.teams} approved of ${t.max} slots`: 'Capacity to be announced'}</span><div class="slotbar" ${progress}><i style="width:${filled}%"></i></div></div><div class="t-foot"><div class="t-prize"><small>Prize pool</small><b>${fmt(t.prize)} <small>${esc(t.currency)}</small></b></div><span class="btn btn-line btn-sm">View tournament</span></div></div></a>`;
 }
-function openT(t){if(!t)return;$('#mImg').hidden=!t.cover;if(t.cover)$('#mImg').src=t.cover;$('#mChips').innerHTML=`<span class="chip">${esc(GAMES[t.game]?.label||t.game||'Game not set')}</span><span class="chip">${esc(t.fmt)}</span>`;$('#mName').textContent=t.name;$('#mDesc').textContent=t.desc;$('#mPrize').textContent=`${fmt(t.prize)} ${t.currency}`;$('#mTeams').textContent=t.max?`${t.teams} / ${t.max}`:String(t.teams);$('#mDates').textContent=t.when;$('#mFmt').textContent=t.fmt;$('#mLoc').textContent=t.loc;$('#mOrg').textContent=t.org;$('#mBracket').href=`tournament.html?id=${encodeURIComponent(t.id)}#eventBrackets`;$('#mBracket').textContent='Open tournament page';$('#mTeamWrap').hidden=true;const registerButton=$('#mReg'),registerNote=$('#mRegReadonly');registerButton.hidden=t.status!=='reg';registerNote.hidden=t.status!=='reg'||!READ_ONLY_PREVIEW;registerButton.disabled=t.status==='reg'&&READ_ONLY_PREVIEW;if(registerButton.disabled){registerButton.setAttribute('aria-describedby','mRegReadonly');registerButton.title='Team registration is disabled in this production-connected preview.';}else{registerButton.removeAttribute('aria-describedby');registerButton.removeAttribute('title');}let teamsLoaded=false;$('#tmodal').classList.add('open');document.body.classList.add('locked');
-  $('#mReg').onclick=async()=>{
-    const button=$('#mReg');if(READ_ONLY_PREVIEW)return;if(!Auth.is()){location.href='login.html?next='+encodeURIComponent('tournaments.html')+'&need=PLAYER';return;}
-    button.disabled=true;
-    try{
-      if(!teamsLoaded){
-        const {data:membershipRows,error:memberError}=await SUPA.client.from('team_members').select('team_id').eq('user_id',Auth.user.id).eq('role','captain').eq('status','active');
-        if(memberError)throw memberError;
-        const ids=[...new Set((membershipRows||[]).map(row=>row.team_id))];
-        if(!ids.length){toast('info','Captain of a team required','Create a team or join one as captain before registering.');location.href='captain.html';return;}
-        const {data:rows,error:teamError}=await SUPA.client.from('teams').select('id,name,tag,game').in('id',ids);
-        if(teamError)throw teamError;
-        const matching=(rows||[]).filter(team=>team.game===t.game);
-        if(!matching.length){toast('err','No eligible team','Your captain teams must use the same game as this tournament.');return;}
-        $('#mTeam').innerHTML=matching.map(team=>`<option value="${esc(team.id)}">${esc(team.name)} (${esc(team.tag)})</option>`).join('');
-        $('#mTeamWrap').hidden=false;teamsLoaded=true;
-      }
-      const {error}=await SUPA.client.rpc('register_team',{p_tournament_id:t.id,p_team_id:$('#mTeam').value});
-      if(error)throw error;
-      button.textContent='Registration submitted';toast('ok','Team submitted','The tournament organizer will review this registration.');
-    }catch(error){toast('err','Could not register team',error.message||'Please try again.');}
-    finally{button.disabled=false;}
-  };
-}
-function closeModal(){$('#tmodal')?.classList.remove('open');document.body.classList.remove('locked');}
-document.addEventListener('click',e=>{if(e.target.closest('[data-tournament-detail]'))return;const card=e.target.closest('.t-card[data-t]');if(card){openT(TOURN.find(t=>String(t.id)===card.dataset.t));return;}if(e.target.closest('#mClose')||e.target.id==='tmodal')closeModal();});
-addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();});
-
 Auth.ready.then(()=>{buildNav();buildConsoleStrip();const whoName=$('#whoName');if(whoName)whoName.textContent=Auth.user?.name||'Sign in required';if(Auth.is()){ensureNotificationPanel();refreshNotifications().catch(error=>console.warn('Notifications unavailable:',error));setInterval(()=>{if(!document.hidden)refreshNotifications().catch(error=>console.warn('Notification refresh failed:',error));},30000);}icons();}).catch(e=>{console.error('Authentication initialization failed:',e);const whoName=$('#whoName');if(whoName)whoName.textContent='Account unavailable';buildNav();icons();});
-

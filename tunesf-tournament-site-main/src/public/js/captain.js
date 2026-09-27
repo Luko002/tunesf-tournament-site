@@ -430,4 +430,3 @@ Auth.ready.then(async()=>{
   buildConsoleStrip();
   icons();
 }).catch(error=>{console.error('Captain workspace startup failed:',error);const panel=document.querySelector('.dgrid');if(panel)panel.innerHTML=`<div class="team-empty workspace-state workspace-error" role="alert"><span class="workspace-state-icon"><i data-lucide="triangle-alert"></i></span><div class="workspace-state-copy"><b>Team workspace unavailable</b><p>${esc(error?.message||'Account access could not be initialized.')}</p><a class="btn btn-line btn-sm" href="captain.html"><i data-lucide="refresh-cw"></i>Reload workspace</a></div></div>`;icons();toast('err','Team workspace unavailable',error?.message||'Please reload and try again.');});
-

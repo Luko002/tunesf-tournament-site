@@ -127,7 +127,7 @@ async function wPublish(){
       organization_id:$('#wOrganization').value||null,
       region:$('#wRegion').value,starts_at:startsAt,
       registration_opens_at:new Date($('#wRegistrationOpens').value).toISOString(),registration_closes_at:new Date($('#wRegistrationCloses').value).toISOString(),
-      max_teams:+$('#wMax').value||64,roster_size:parseInt($('#wRoster').value,10)||5,
+      max_teams:+$('#wMax').value||64,roster_size:Number($('#wRoster').value)||5,
       substitute_limit:+$('#wSubs').value||0,check_in_minutes:+($('#wCheck').value.match(/\d+/)||[])[0]||60,
       map_pool:$$('#wMaps button.act').map(button=>button.dataset.m),
       anti_cheat_required:$('#wAc').classList.contains('act'),

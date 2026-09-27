@@ -5,4 +5,3 @@
 .team-directory-controls .club-count{align-self:center;white-space:nowrap}.team-directory-controls .btn{white-space:nowrap}
 @media(max-width:880px){.team-directory-controls{grid-template-columns:repeat(2,minmax(0,1fr))}.team-directory-controls>.club-search{grid-column:1/-1}}
 @media(max-width:560px){.team-directory-controls{grid-template-columns:1fr;padding:12px;gap:10px}.team-directory-controls>.club-search{grid-column:auto}.team-directory-controls .club-count{align-self:start}}
-

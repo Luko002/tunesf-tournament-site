@@ -6,11 +6,12 @@ Auth.ready.then(async()=>{
   const wrap=document.querySelector('main .sec.tight .wrap');
   if(!wrap)return;
   wrap.innerHTML=`<div class="console-strip" id="consoleStrip"></div>
-    <section class="dcard event-card personal-match-schedule"><div class="dh"><i data-lucide="calendar-clock"></i>My match schedule</div><div class="db" id="playerMatches" aria-live="polite"><p class="team-empty">Loading your matches…</p></div></section>
-    <div class="player-section-heading"><h2>My teams</h2><a class="btn btn-line btn-sm" href="captain.html"><i data-lucide="users-round"></i>Team management</a></div>
+    <section class="player-game-dashboard" id="playerGameDashboard" aria-live="polite"><div class="player-dashboard-loading">Loading your game record…</div></section>
+    <section class="dcard personal-match-schedule"><div class="dh"><i data-lucide="calendar-clock"></i><span>Upcoming matches</span></div><div class="db" id="playerMatches" aria-live="polite"><p class="team-empty">Loading your matches…</p></div></section>
+    <div class="player-section-heading"><div><span class="player-section-kicker">YOUR ROSTERS</span><h2>My teams</h2></div><a class="btn btn-line btn-sm" href="captain.html"><i data-lucide="users-round"></i>Team management</a></div>
     <details class="dcard player-team-create"><summary class="dh"><i data-lucide="plus"></i>Create a team</summary><div class="db"><p class="team-empty">Creating a team makes you its captain. Match its roster size to the tournament before registering.</p><form id="playerTeamCreateForm" class="team-create-form"><label><span>Team name</span><input name="name" minlength="2" maxlength="80" required placeholder="e.g. Tunisian squad"></label><label><span>Short tag</span><input name="tag" minlength="2" maxlength="8" required placeholder="TNS"></label><label><span>Game</span><select name="game" required><option value="">Choose a game</option><option value="cs2">Counter-Strike 2</option><option value="val">VALORANT</option><option value="lol">League of Legends</option><option value="rl">Rocket League</option><option value="mlbb">Mobile Legends: Bang Bang</option><option value="eafc">EA SPORTS FC</option><option value="efootball">eFootball</option></select></label><label><span>Region</span><input name="region" maxlength="100" placeholder="e.g. Tunis"></label><label><span>Team logo (optional, JPG/PNG/WebP up to 5 MB)</span><input name="logo" type="file" accept="image/jpeg,image/png,image/webp"></label><button class="btn btn-gold btn-sm" type="submit"><i data-lucide="plus"></i>Create team</button></form></div></details>
     <section class="player-team-list" id="playerTeams" aria-live="polite"><div class="team-empty">Loading your teams…</div></section>
-    <details class="dcard player-profile"><summary class="dh"><i data-lucide="user-round"></i>Player profile</summary><div class="db"><div class="profile-image-editor">${identityImage(Auth.user.avatarPath,Auth.user.name,72,'player')}<label><span>Profile picture (JPG/PNG/WebP, up to 5 MB)</span><input id="playerAvatarInput" type="file" accept="image/jpeg,image/png,image/webp"></label><button class="btn btn-line btn-sm" id="removePlayerAvatar" type="button"${Auth.user.avatarPath?'':' hidden'}>Remove picture</button></div><p class="team-empty">Add a Discord contact name only if you want it shown on your team rosters.</p><form id="playerDiscordForm" class="club-contact"><label><span>Discord username (optional)</span><input name="discord_username" minlength="2" maxlength="64" value="${esc(Auth.user.discordUsername||'')}" placeholder="Leave blank to remove it"></label><button class="btn btn-line btn-sm" type="submit">Save profile</button></form></div></details>`;
+    <details class="dcard player-profile"><summary class="dh"><i data-lucide="user-round"></i>Account &amp; profile settings</summary><div class="db"><div class="profile-image-editor">${identityImage(Auth.user.avatarPath,Auth.user.name,72,'player')}<label><span>Profile picture (JPG/PNG/WebP, up to 5 MB)</span><input id="playerAvatarInput" type="file" accept="image/jpeg,image/png,image/webp"></label><button class="btn btn-line btn-sm" id="removePlayerAvatar" type="button"${Auth.user.avatarPath?'':' hidden'}>Remove picture</button></div><p class="team-empty">Add a Discord contact name only if you want it shown on your team rosters.</p><form id="playerDiscordForm" class="club-contact"><label><span>Discord username (optional)</span><input name="discord_username" minlength="2" maxlength="64" value="${esc(Auth.user.discordUsername||'')}" placeholder="Leave blank to remove it"></label><button class="btn btn-line btn-sm" type="submit">Save profile</button></form></div></details>`;
   if(READ_ONLY_PREVIEW){
     const note=document.createElement('p');note.id='playerWorkspaceReadonly';note.className='admin-readonly-note';note.setAttribute('role','note');note.textContent='Profile, team, and membership changes are disabled in this local preview because it is connected to production. Use a writable staging environment to save changes.';
     wrap.querySelector('.console-strip')?.insertAdjacentElement('afterend',note);
@@ -18,6 +19,8 @@ Auth.ready.then(async()=>{
   }
   const list=$('#playerTeams');
   const matchHost=$('#playerMatches');
+  const gameDashboard=$('#playerGameDashboard');
+  let activeGame='',activeTeamId='',dashboardTeams=[],dashboardStats=new Map();
   $('#playerTeamCreateForm').addEventListener('submit',async event=>{
     event.preventDefault();if(READ_ONLY_PREVIEW)return;
     const form=event.currentTarget,button=form.querySelector('button[type="submit"]'),values=Object.fromEntries(new FormData(form));
@@ -62,7 +65,7 @@ Auth.ready.then(async()=>{
   });
   const renderMatches=async()=>{
     const {data,error}=await SUPA.client.rpc('get_my_team_matches');if(error)throw error;
-    const rows=data||[],now=Date.now();
+    const rows=(data||[]).filter(match=>(!activeGame||match.game===activeGame)&&(!activeTeamId||match.your_team_id===activeTeamId)),now=Date.now();
     const identities=new Map();rows.forEach(match=>{if(match.your_team_id)identities.set(match.your_team_id,{id:match.your_team_id,logo_path:match.your_team_logo_path});if(match.opponent_team_id)identities.set(match.opponent_team_id,{id:match.opponent_team_id,logo_path:match.opponent_team_logo_path});});
     await applyOrganizationTeamLogos([...identities.values()]);
     rows.forEach(match=>{match.your_team_logo_path=identities.get(match.your_team_id)?.logo_path||match.your_team_logo_path;match.opponent_team_logo_path=identities.get(match.opponent_team_id)?.logo_path||match.opponent_team_logo_path;});
@@ -70,7 +73,7 @@ Auth.ready.then(async()=>{
       const priority=m=>m.match_status==='live'?0:m.match_status==='paused'?1:m.match_status==='ready'&&m.scheduled_at&&new Date(m.scheduled_at)>now?2:3;
       return priority(a)-priority(b)||(a.scheduled_at?new Date(a.scheduled_at).getTime():Infinity)-(b.scheduled_at?new Date(b.scheduled_at).getTime():Infinity);
     });
-    if(!rows.length){matchHost.innerHTML='<p class="team-empty">Your scheduled matches will appear here when your team is entered in a published bracket.</p>';return;}
+    if(!rows.length){matchHost.innerHTML='<p class="team-empty">No upcoming matches for this game yet. Published team fixtures will appear here.</p>';return;}
     const label={live:'LIVE',paused:'PAUSED',ready:'UPCOMING',result_pending:'RESULT REVIEW',disputed:'DISPUTE REVIEW'};
     matchHost.innerHTML=`<div class="personal-match-grid">${rows.map(match=>{
       const live=match.match_status==='live',scheduled=match.match_status==='ready'&&match.scheduled_at;
@@ -88,13 +91,31 @@ Auth.ready.then(async()=>{
     const badge=el.closest('.personal-match-card')?.querySelector('.personal-match-top .badge');
     if(badge){badge.textContent='RESCHEDULE NEEDED';badge.classList.add('needs-check');}
   });
+  const gameName=key=>GAMES[key]?.label||key||'Game not set';
+  function renderGameDashboard(){
+    if(!gameDashboard)return;
+    const availableGames=[...new Set(dashboardTeams.map(team=>team.game).filter(Boolean))];
+    if(!activeGame||!availableGames.includes(activeGame))activeGame=availableGames.includes(Auth.user.game)?Auth.user.game:availableGames[0]||Auth.user.game||'';
+    const gameTeams=dashboardTeams.filter(team=>team.game===activeGame);
+    if(!gameTeams.some(team=>team.id===activeTeamId))activeTeamId=gameTeams[0]?.id||'';
+    const team=gameTeams.find(item=>item.id===activeTeamId),profile=team?dashboardStats.get(team.id):null;
+    const stats=profile?.stats||{},recordMatches=(profile?.matches||[]).filter(match=>['completed','forfeit'].includes(match.status)).sort((a,b)=>new Date(b.scheduled_at||0)-new Date(a.scheduled_at||0));
+    const hasStats=Boolean(profile?.stats),matchCount=hasStats?Number(stats.matches)||0:null,wins=hasStats?Number(stats.wins)||0:null,losses=hasStats?(Number.isFinite(Number(stats.losses))?Number(stats.losses):Math.max(0,matchCount-wins)):null,winRate=matchCount?Math.round(wins/matchCount*100):0;
+    const gameTabs=availableGames.map(game=>`<button type="button" class="player-game-tab${game===activeGame?' active':''}" data-player-game="${esc(game)}" aria-pressed="${game===activeGame}">${esc(gameName(game))}</button>`).join('');
+    const teamPicker=gameTeams.length>1?`<label class="player-stat-team-picker"><span>Team</span><select id="playerStatTeam">${gameTeams.map(item=>`<option value="${esc(item.id)}"${item.id===activeTeamId?' selected':''}>${esc(item.name)}</option>`).join('')}</select></label>`:'';
+    const history=recordMatches.length?`<div class="player-recent-results">${recordMatches.slice(0,5).map(match=>`<a class="player-result-row" href="tournament.html?id=${encodeURIComponent(match.tournament_id)}"><span class="player-result-mark ${match.won?'is-win':'is-loss'}">${match.won?'W':'L'}</span><span class="player-result-copy"><b>${esc(match.opponent||'Opponent')}</b><small>${esc(match.tournament||'Tournament')} · Round ${esc(match.round??'—')}</small></span><strong class="player-result-outcome">${match.won?'WIN':'LOSS'}</strong></a>`).join('')}</div>`:'<p class="player-stat-empty">No completed results for this game yet. Your record will appear here after a match is confirmed.</p>';
+    gameDashboard.innerHTML=`<div class="player-game-head"><div><span class="player-dashboard-kicker">YOUR COMPETITIVE PROFILE</span><h2>${esc(gameName(activeGame))}</h2><p>${team?`Results for <b>${esc(team.name)}</b>`:'Join a team in a game to start tracking your record.'}</p></div>${teamPicker}</div>${availableGames.length>1?`<div class="player-game-tabs" role="group" aria-label="Choose game">${gameTabs}</div>`:''}<div class="player-record-grid"><article class="player-record-card player-record-feature"><span>Matches played</span><b>${matchCount??'—'}</b><small>${team?'Completed team matches':'Waiting for your first result'}</small></article><article class="player-record-card"><span>Wins</span><b>${wins??'—'}</b><small>${matchCount?`${winRate}% win rate`:'No results yet'}</small></article><article class="player-record-card"><span>Losses</span><b>${losses??'—'}</b><small>${team?'Confirmed results only':'No results yet'}</small></article><article class="player-record-card"><span>Win rate</span><b>${matchCount?`${winRate}%`:'—'}</b><small>${matchCount?'From completed matches':'No match stats yet'}</small></article></div><section class="player-recent-card"><div class="player-recent-head"><div><span class="player-dashboard-kicker">RECENT FORM</span><h3>Recent results</h3></div><span>${recordMatches.length?`${Math.min(5,recordMatches.length)} shown`:'No results'}</span></div>${history}</section>`;
+    list.querySelectorAll('[data-player-team-game]').forEach(card=>{card.hidden=Boolean(activeGame&&card.dataset.playerTeamGame!==activeGame);});
+    gameDashboard.querySelectorAll('[data-player-game]').forEach(button=>button.addEventListener('click',()=>{activeGame=button.dataset.playerGame;activeTeamId='';renderGameDashboard();renderMatches().catch(()=>{});}));
+    gameDashboard.querySelector('#playerStatTeam')?.addEventListener('change',event=>{activeTeamId=event.target.value;renderGameDashboard();renderMatches().catch(()=>{});});
+  }
   const render=async()=>{
     list.innerHTML='<div class="team-empty">Loading your teams…</div>';
     const {data:memberships,error}=await SUPA.client.from('team_members').select('team_id,role,status')
       .eq('user_id',Auth.user.id).eq('status','active');
     if(error)throw error;
     const ids=[...new Set((memberships||[]).map(row=>row.team_id))];
-    if(!ids.length){list.innerHTML='<div class="dcard"><div class="dh"><i data-lucide="users-round"></i>No teams yet</div><div class="db"><p class="team-empty">Accept a captain’s invitation link to join a team, or create your own team.</p></div></div>';icons();return;}
+    if(!ids.length){dashboardTeams=[];dashboardStats=new Map();renderGameDashboard();list.innerHTML='<div class="dcard"><div class="dh"><i data-lucide="users-round"></i>No teams yet</div><div class="db"><p class="team-empty">Accept a captain’s invitation link to join a team, or create your own team.</p></div></div>';icons();return;}
       const {data:teams, error:teamsError}=await SUPA.client.from('teams')
       .select('id,name,tag,game,region,logo_path').in('id',ids);
     if(teamsError)throw teamsError;
@@ -108,15 +129,19 @@ Auth.ready.then(async()=>{
     const {data:profiles,error:profileError}=memberIds.length?await SUPA.client.from('public_profiles').select('id,discord_username,avatar_path').in('id',memberIds):{data:[],error:null};
     if(profileError)throw profileError;
     const profileById=new Map((profiles||[]).map(profile=>[profile.id,profile]));
+    dashboardTeams=teams||[];
+    const teamProfiles=await Promise.all(dashboardTeams.map(async team=>{const {data,error}=await SUPA.client.rpc('get_public_team_profile',{p_team_id:team.id});return [team.id,error?null:data];}));
+    dashboardStats=new Map(teamProfiles);
     list.innerHTML=rosters.map(({team,membership,roster,error})=>{
       const members=error?'<p class="team-empty">Roster details are unavailable.</p>':`<ul class="team-roster">${roster.map(row=>{const profile=profileById.get(row.user_id);return `<li>${identityImage(profile?.avatar_path,row.username||row.player_name||'Player',32,'player')}<span><b>${esc(row.username||row.player_name||'Player')}${row.user_id===Auth.user.id?' · You':''}</b><small>${esc(row.member_role||'player')}${profile?.discord_username?` · Discord @${esc(profile.discord_username)}`:''}</small></span>${row.member_role==='captain'?'<i data-lucide="crown" aria-label="Team captain"></i>':''}</li>`;}).join('')}</ul>`;
       const role=membership?.role||'player';
-      return `<article class="dcard team-card"><div class="dh">${identityImage(team.logo_path,team.name,36,'team')}${esc(team.name)}<span class="mono-r">${esc(team.tag)}</span></div><div class="db">
+      return `<article class="dcard team-card" data-player-team-game="${esc(team.game)}"><div class="dh">${identityImage(team.logo_path,team.name,36,'team')}${esc(team.name)}<span class="mono-r">${esc(team.tag)}</span></div><div class="db">
         <div class="team-meta"><span>${esc(team.game.toUpperCase())}</span><span>${esc(team.region||'Region not set')}</span><span>Your role: ${esc(role)}</span></div>
         <h3 class="team-section-title">Team roster <span>${error?'':roster.length}</span></h3>${members}
         ${role==='captain'?'<a class="btn btn-line btn-sm" href="captain.html" style="margin-top:14px">Manage team</a>':`<button class="btn btn-line btn-sm" type="button" data-leave-team="${esc(team.id)}" style="margin-top:14px"${READ_ONLY_PREVIEW?' disabled aria-describedby="playerWorkspaceReadonly" title="Membership changes are disabled in this production-connected preview."':''}>Leave team</button>`}
       </div></article>`;
     }).join('');
+    renderGameDashboard();
     icons();
   };
   list.addEventListener('click',async event=>{
@@ -137,4 +162,3 @@ Auth.ready.then(async()=>{
   setInterval(()=>renderMatches().catch(error=>console.warn('Match schedule refresh failed:',error)),30000);
   icons();
 }).catch(error=>toast('err','Player workspace unavailable',error.message||'Please reload and try again.'));
-

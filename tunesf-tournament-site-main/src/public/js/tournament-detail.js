@@ -26,6 +26,16 @@ else (async()=>{
       :t.status==='registration_open'&&(t.registration_closes_at||t.starts_at)&&new Date(t.registration_closes_at||t.starts_at).getTime()<=now?'registration_closed':t.status;
     const eventStats=[['REGISTRATION',effectiveStatus.replaceAll('_',' ')],['APPROVED TEAMS',capacity?`${count} / ${capacity}`:String(count)],['STARTS',date(t.starts_at)],['PRIZE POOL',`${fmt(t.prize_pool)} ${t.currency||'TND'}`]];
     header.innerHTML=`${coverUrl?`<img class="event-cover" src="${esc(coverUrl)}" alt="${esc(t.name)} tournament cover">`:''}<div class="event-kickers"><span class="eyebrow">${esc(GAMES[t.game]?.label||t.game)}</span><span class="event-status-pill" data-status="${esc(effectiveStatus)}"><i data-lucide="radio"></i>${esc(effectiveStatus.replaceAll('_',' '))}</span></div><h1 class="ph-title">${esc(t.name)}</h1><p class="lead">${esc(t.description||'The organizer has not added event details yet.')}</p><div class="event-hero-stats">${eventStats.map(([label,value])=>`<div><small>${label}</small><b>${esc(value)}</b></div>`).join('')}</div><div class="hero-cta">${effectiveStatus==='registration_open'?`<label id="eventTeamWrap" hidden><span>Choose team</span><select id="eventTeam"${READ_ONLY_PREVIEW?' disabled':''}></select></label><button class="btn btn-gold" id="eventRegister" type="button"${READ_ONLY_PREVIEW?' disabled aria-describedby="eventRegisterReadonly" title="Registration is disabled in this production-connected preview."':''}><i data-lucide="user-plus"></i>Register a team</button>${READ_ONLY_PREVIEW?'<p class="preview-write-note event-register-readonly-note" id="eventRegisterReadonly" role="note">Team registration is disabled in this production-connected preview. Open a writable staging site to submit a team entry.</p>':''}`:''}</div><nav class="event-journey" aria-label="Tournament event pages">${eventPageNav.map(([view,label,icon])=>`<a href="${eventPageUrl(view)}"${activeView===view?' aria-current="page"':''}><i data-lucide="${icon}" aria-hidden="true"></i>${label}</a>`).join('')}<a href="broadcast.html?id=${encodeURIComponent(t.id)}" target="_blank" rel="noopener"><i data-lucide="monitor-play" aria-hidden="true"></i>Broadcast</a></nav>`;
+    if(effectiveStatus==='registration_open'){
+      const registrationPanel=document.createElement('section');
+      registrationPanel.className='event-registration-panel';registrationPanel.id='eventRegistrationPanel';registrationPanel.hidden=true;
+      registrationPanel.setAttribute('aria-labelledby','eventRegistrationTitle');
+      registrationPanel.innerHTML=`<div class="event-registration-heading"><div><span class="eyebrow">TEAM ENTRY</span><h2 id="eventRegistrationTitle">Lock your tournament lineup</h2><p>Choose the active players for this ${Number(t.roster_size)||1}v${Number(t.roster_size)||1} event roster. Your selection is saved with the registration.</p></div><span class="event-registration-game">${esc(GAMES[t.game]?.label||t.game)}</span></div><label class="event-registration-team"><span>Team</span><select id="eventTeam"${READ_ONLY_PREVIEW?' disabled':''}><option value="">Choose a team</option></select></label><div class="event-lineup-summary" id="eventLineupSummary" aria-live="polite"><span>Choose a team to see its active game roster.</span></div><div class="event-lineup-list" id="eventLineupRoster"></div><div class="event-registration-footer"><p id="eventLineupHint">Select the required starters. Substitutes are optional.</p><button class="btn btn-gold" id="eventSubmitRegistration" type="button" disabled${READ_ONLY_PREVIEW?' disabled':''}><i data-lucide="lock-keyhole"></i>Lock roster &amp; register</button></div>`;
+      header.querySelector('#eventTeamWrap')?.remove();
+      header.querySelector('.hero-cta')?.after(registrationPanel);
+      header.querySelector('#eventRegister')?.setAttribute('aria-controls','eventRegistrationPanel');
+      header.querySelector('#eventRegister')?.setAttribute('aria-expanded','false');
+    }
 
     const canManageEvent=Auth.has('MANAGE_SCHEDULE');
     const [regResult,stageResult,prizeResult,adminRegResult,adminStageResult]=await Promise.all([
@@ -46,9 +56,26 @@ else (async()=>{
     await applyOrganizationTeamLogos(teamResult.data||[]);
     const teamMap=new Map((teamResult.data||[]).map(row=>[row.id,row]));
     const regTeam=new Map([...regs,...adminRegistrations].map(row=>[row.id,row.team_id]));
+    const myTeamIds=new Set();
+    if(Auth.is()&&Auth.user?.id){
+      const {data:memberships,error:membershipError}=await SUPA.client.from('team_members').select('team_id').eq('user_id',Auth.user.id).eq('status','active');
+      if(membershipError)console.warn('Your tournament team could not be highlighted:',membershipError.message);
+      else for(const membership of memberships||[])myTeamIds.add(membership.team_id);
+    }
     adminRegistrations=adminRegistrations.map(row=>({...row,team:teamMap.get(row.team_id)}));
     const stageMatches=new Map(stages.map(stage=>[stage.id,(matchResult.data||[]).filter(match=>match.stage_id===stage.id)]));
     const displayedRoundByMatch=new Map();
+    const matchNumberByMatch=new Map();
+    const numberMatchesByRound=matches=>{
+      const groups=new Map();
+      for(const match of matches){
+        const key=`${match.stage_id}:${match.round_number}`;
+        if(!groups.has(key))groups.set(key,[]);
+        groups.get(key).push(match);
+      }
+      for(const group of groups.values())group.sort((a,b)=>a.position-b.position).forEach((match,index)=>matchNumberByMatch.set(match.id,index+1));
+    };
+    numberMatchesByRound(matchResult.data||[]);
     const stageStandings=new Map();
     for(const stage of stages.filter(row=>row.format==='round_robin')){
       const {data,error}=await SUPA.client.from('tournament_standings').select('registration_id,played,wins,draws,losses,points,score_for,score_against,rank').eq('stage_id',stage.id).order('rank');
@@ -86,13 +113,14 @@ else (async()=>{
     const refereeMarkup=officialMap.size?`<ul class="event-official-list">${[...officialMap.values()].map(official=>{
       const matches=official.matches.sort((a,b)=>a.round_number-b.round_number||a.position-b.position);
       const role=official.tournamentReferee?'Tournament referee':'Match official';
-      const assignments=matches.length?`<details class="event-official-assignments"><summary>${matches.length} match${matches.length===1?'':'es'} assigned</summary><ul>${matches.map(match=>`<li><a href="${eventPageUrl('schedule','eventBrackets')}">${esc(stages.find(stage=>stage.id===match.stage_id)?.name||'Tournament')} · Round ${esc(match.round_number)} · Match ${esc(match.position)} <i data-lucide="arrow-right" aria-hidden="true"></i></a></li>`).join('')}</ul></details>`:'';
+      const assignments=matches.length?`<details class="event-official-assignments"><summary>${matches.length} match${matches.length===1?'':'es'} assigned</summary><ul>${matches.map(match=>`<li><a href="${eventPageUrl('schedule','eventBrackets')}">${esc(stages.find(stage=>stage.id===match.stage_id)?.name||'Tournament')} · Round ${esc(match.round_number)} · Match ${esc(matchNumberByMatch.get(match.id)||1)} <i data-lucide="arrow-right" aria-hidden="true"></i></a></li>`).join('')}</ul></details>`:'';
       return `<li class="event-official"><span class="event-official-mark" aria-hidden="true"><i data-lucide="shield-check"></i></span><span class="event-official-info"><b>${esc(official.name)}</b><small>${role}</small>${assignments}</span></li>`;
     }).join('')}</ul>`:'<p class="team-empty">No referee has been assigned to this tournament yet.</p>';
 
     const teamFor=registrationId=>teamMap.get(regTeam.get(registrationId));
+    const isMyTeamMatch=match=>[match.home_registration_id,match.away_registration_id].some(registrationId=>myTeamIds.has(regTeam.get(registrationId)));
     const stageFor=stageId=>stages.find(stage=>stage.id===stageId);
-    const matchLabel=match=>`${stageFor(match.stage_id)?.name||'Tournament'} - ${displayedRoundByMatch.get(match.id)||`Round ${match.round_number}`} - Match ${match.position}`;
+    const matchLabel=match=>`${stageFor(match.stage_id)?.name||'Tournament'} - ${displayedRoundByMatch.get(match.id)||`Round ${match.round_number}`} - Match ${matchNumberByMatch.get(match.id)||1}`;
     const matchStatusLabel=status=>({live:'Live',paused:'Paused',result_pending:'Result review',disputed:'Disputed',pending:'Scheduled',ready:'Ready',completed:'Final',forfeit:'Forfeit',cancelled:'Cancelled'}[status]||String(status||'Unknown').replaceAll('_',' '));
     const schedulePassed=match=>['pending','ready'].includes(match.status)&&match.scheduled_at&&new Date(match.scheduled_at).getTime()<=Date.now();
     const publicMatchStatus=match=>schedulePassed(match)?'Schedule update needed':matchStatusLabel(match.status);
@@ -145,25 +173,29 @@ else (async()=>{
       return `<section class="event-hub" id="eventLiveHub" aria-labelledby="eventHubTitle" data-active-filter="all"><div class="event-hub-head"><div><span class="event-hub-kicker"><i data-lucide="radio"></i> PUBLIC EVENT CENTER</span><h2 id="eventHubTitle">Follow the tournament</h2><p>${esc(liveCopy)}</p></div><div class="event-hub-actions"><button class="btn btn-line btn-sm" id="printEventSheet" type="button"><i data-lucide="printer"></i>Print match sheet</button><a class="btn btn-gold btn-sm" href="broadcast.html?id=${encodeURIComponent(t.id)}" target="_blank" rel="noopener"><i data-lucide="monitor-play"></i>Broadcast view</a><button class="btn btn-line btn-sm" id="shareEventHub" type="button"><i data-lucide="share-2"></i>Share event</button><button class="btn btn-line btn-sm" id="refreshEventHub" type="button"><i data-lucide="refresh-cw"></i>Refresh</button></div></div>${nextMatchCard}<div class="event-hub-stats" aria-label="Event match summary"><div><b>${liveMatches.length}</b><small>Live / in review</small></div><div><b>${upcomingMatches.length}</b><small>Upcoming matches</small></div><div><b>${playedMatches.length}</b><small>Results recorded</small></div><span id="eventHubUpdated" role="status" aria-live="polite">Updated ${esc(updatedAt)}</span></div>${matchFilters}${statusLegend}<span id="eventFilterStatus" class="event-filter-status" role="status" aria-live="polite">Showing all match updates</span><section class="event-hub-section" data-event-match-section="live"><div class="event-hub-section-title"><h3>${esc(liveHeading)}</h3><span class="event-hub-live-dot${liveMatches.length?' is-live':''}">${liveMatches.length?'LIVE':'EVENT BOARD'}</span></div><div class="event-hub-matches">${liveCards}</div></section><div class="event-hub-columns${standingsStage?' has-standings':''}"><section class="event-hub-section" data-event-match-section="upcoming"><div class="event-hub-section-title"><h3>Up next</h3>${upcomingActions}</div><div class="event-hub-matches" id="eventUpcomingMatches">${upcomingCards}</div>${upcomingMore}</section><section class="event-hub-section" data-event-match-section="results"><div class="event-hub-section-title"><h3>Recent results</h3><a href="${eventPageUrl('schedule','eventBrackets')}">Full results <i data-lucide="arrow-right"></i></a></div><div class="event-hub-matches" id="eventRecentResults">${resultCards}</div>${resultsMore}</section>${standingsCard}</div><div class="event-hub-footer"><span>Scores and standings follow published tournament records.</span><a href="${eventPageUrl('teams','eventParticipants')}">Meet the teams <i data-lucide="arrow-right"></i></a></div></section>`;
     };
     const sideHtml=(registrationId,expected,score,winner)=>{
-      const team=teamFor(registrationId),label=team?`<span class="bracket-team-identity">${identityImage(team.logo_path,team.name,28,'team')}<span class="bracket-team-copy"><a href="team.html?id=${encodeURIComponent(team.id)}"><span class="bracket-team-name" dir="auto">${esc(team.name)}</span>${team.tag?`<small>${esc(team.tag)}</small>`:''}</a></span></span>`:expected?'Pending':'BYE';
+      const team=teamFor(registrationId),mark=team?(team.logo_path?identityImage(team.logo_path,team.name,36,'team'):`<span class="double-elim-team-fallback" role="img" aria-label="${esc(team.name)} logo"><i data-lucide="shield" aria-hidden="true"></i><b>${esc((team.tag||team.name).slice(0,4))}</b></span>`):'',label=team?`<span class="bracket-team-identity">${mark}<span class="bracket-team-copy"><a href="team.html?id=${encodeURIComponent(team.id)}"><span class="bracket-team-name" dir="auto">${esc(team.name)}</span>${team.tag?`<small>${esc(team.tag)}</small>`:''}</a></span></span>`:expected?'Pending':'BYE';
       return `<div class="bracket-match-team${winner?' is-winner':''}"><span class="bracket-match-label">${label}</span><b>${score===null||score===undefined?'-':score}</b></div>`;
     };
-    const matchHtml=match=>`<article class="bracket-match" data-status="${esc(publicMatchStatusKey(match))}"><div class="bracket-match-meta"><span>Match ${match.position}</span><b>${esc(publicMatchStatus(match))}</b></div>${sideHtml(match.home_registration_id,match.home_expected,match.home_score,match.winner_registration_id===match.home_registration_id&&match.winner_registration_id!==null)}${sideHtml(match.away_registration_id,match.away_expected,match.away_score,match.winner_registration_id===match.away_registration_id&&match.winner_registration_id!==null)}</article>`;
+    const matchHtml=match=>`<article class="bracket-match${isMyTeamMatch(match)?' is-my-team':''}" data-status="${esc(publicMatchStatusKey(match))}"><div class="bracket-match-meta"><span>Match ${matchNumberByMatch.get(match.id)||1}</span><b>${esc(publicMatchStatus(match))}</b></div>${sideHtml(match.home_registration_id,match.home_expected,match.home_score,match.winner_registration_id===match.home_registration_id&&match.winner_registration_id!==null)}${sideHtml(match.away_registration_id,match.away_expected,match.away_score,match.winner_registration_id===match.away_registration_id&&match.winner_registration_id!==null)}</article>`;
     const eliminationHtml=stage=>{
       const matches=stageMatches.get(stage.id)||[];
       if(!matches.length)return '<p class="team-empty">No matches have been published for this stage yet.</p>';
       const sides=stage.format==='double_elimination'?[['winners','Upper bracket'],['losers','Lower bracket'],['grand_final','Grand final']]:[['main',stage.format==='single_elimination'?'Single elimination':'Playoff bracket']];
       return sides.map(([side,title])=>{
-        const group=matches.filter(match=>match.bracket_side===side&&!(match.status==='cancelled'&&!match.home_expected&&!match.away_expected));
+        const conditionalReset=side==='grand_final'&&matches.some(match=>match.bracket_side==='grand_final'&&match.round_number===2&&!match.home_expected&&!match.away_expected);
+        const group=matches.filter(match=>match.bracket_side===side&&!(match.status==='cancelled'&&!match.home_expected&&!match.away_expected)&&!(side==='grand_final'&&match.round_number===2&&!match.home_expected&&!match.away_expected));
         if(!group.length)return '';
         const rounds=[...new Set(group.map(match=>match.round_number))].sort((a,b)=>a-b);
-        return `<section class="event-bracket-stage"><div class="dh"><i data-lucide="git-fork"></i>${title}<span class="bracket-stage-meta">${esc(stage.name)}</span></div>${rounds.length>1?'<p class="bracket-scroll-hint"><i data-lucide="move-horizontal" aria-hidden="true"></i> Scroll sideways to follow later rounds</p>':''}<div class="bracket-rail" tabindex="0" role="region" aria-label="${esc(title)} rounds"><div class="bracket-columns">${rounds.map(round=>`<div class="bracket-round"><h4>Round ${round}</h4>${group.filter(match=>match.round_number===round).map(matchHtml).join('')}</div>`).join('')}</div></div></section>`;
+        return `<section class="event-bracket-stage"><div class="dh"><i data-lucide="git-fork"></i>${title}<span class="bracket-stage-meta">${esc(stage.name)}</span></div>${rounds.length>1?'<p class="bracket-scroll-hint"><i data-lucide="move-horizontal" aria-hidden="true"></i> Scroll sideways to follow later rounds</p>':''}<div class="bracket-rail" tabindex="0" role="region" aria-label="${esc(title)} rounds"><div class="bracket-columns">${rounds.map(round=>{const roundMatches=group.filter(match=>match.round_number===round).sort((a,b)=>a.position-b.position);roundMatches.forEach((match,index)=>matchNumberByMatch.set(match.id,index+1));return `<div class="bracket-round"><h4>Round ${round}</h4>${roundMatches.map(matchHtml).join('')}</div>`}).join('')}</div></div>${conditionalReset?'<p class="bracket-scroll-hint">Bracket reset is conditional: it is played only if the lower-bracket finalist wins the first grand final.</p>':''}</section>`;
       }).join('');
     };
     const roundRobinHtml=stage=>{
       const standings=stageStandings.get(stage.id)||[],matches=stageMatches.get(stage.id)||[];
       const laterStages=stages.filter(other=>other.stage_number>stage.stage_number);
-      const qualified=new Set(laterStages.flatMap(other=>(stageMatches.get(other.id)||[]).flatMap(match=>[match.home_registration_id,match.away_registration_id]).filter(Boolean)));
+      const laterFixtures=laterStages.flatMap(other=>stageMatches.get(other.id)||[]);
+      const qualified=new Set(laterFixtures.flatMap(match=>[match.home_registration_id,match.away_registration_id]).filter(Boolean));
+      const semifinalSeeds=new Set(laterFixtures.filter(match=>match.bracket_side==='winners'&&match.round_number===2).flatMap(match=>[match.home_registration_id,match.away_registration_id]).filter(Boolean));
+      const playoffByeCount=Number(t.playoff_bye_count)||semifinalSeeds.size;
       const qualifierCount=Math.max(2,Math.min(64,Number(t.playoff_qualifier_count)||4));
       const rowQualifies=row=>laterStages.length?qualified.has(row.registration_id):t.format==='round_robin_playoffs'&&row.rank<=qualifierCount;
       const table=standings.length?`<p class="rr-scroll-hint">Scroll the table horizontally to see every standings column <i data-lucide="move-horizontal" aria-hidden="true"></i></p><div class="rr-table-wrap" tabindex="0" role="region" aria-label="Scrollable round-robin standings"><table class="rr-table"><thead><tr><th>#</th><th>Team</th><th>P</th><th>W</th><th>L</th><th>+/-</th><th>Pts</th><th>Qualification</th></tr></thead><tbody>${standings.map(row=>{const team=teamFor(row.registration_id),isQualified=rowQualifies(row),diff=row.score_for-row.score_against,qualification=isQualified?'<span class="rr-qualified-badge">QUALIFIED</span>':laterStages.length?'<span class="rr-out-badge">NOT QUALIFIED</span>':t.format==='round_robin_playoffs'?'<span class="rr-pending-badge">IN CONTENTION</span>':'<span class="rr-pending-badge">LEAGUE TABLE</span>';return `<tr class="${isQualified?'is-qualified':''}"${isQualified?' data-qualifies="true"':''}><td class="rr-rank">${row.rank}</td><td><span class="team-identity">${identityImage(team?.logo_path,team?.name||'Team',30,'team')}<a href="team.html?id=${encodeURIComponent(regTeam.get(row.registration_id)||'')}">${esc(team?.name||'Team unavailable')} <small>${esc(team?.tag||'')}</small></a></span></td><td>${row.played}</td><td>${row.wins}</td><td>${row.losses}</td><td class="rr-diff${diff>0?' is-positive':diff<0?' is-negative':''}">${diff>0?'+':''}${diff}</td><td><b>${row.points}</b></td><td>${qualification}</td></tr>`}).join('')}</tbody></table></div>`:'<p class="team-empty">Standings will fill in as match results are approved.</p>';
@@ -192,20 +224,53 @@ else (async()=>{
         const unassigned=matches.filter(match=>!used.has(match.id));
         if(unassigned.length)rounds.push({number:'Other',matches:unassigned});
       }
-      for(const round of rounds)for(const match of round.matches)displayedRoundByMatch.set(match.id,typeof round.number==='number'?`Round ${round.number}`:round.number);
+      for(const round of rounds){
+        for(const [index,match] of round.matches.entries()){
+          displayedRoundByMatch.set(match.id,typeof round.number==='number'?`Round ${round.number}`:round.number);
+          matchNumberByMatch.set(match.id,index+1);
+        }
+      }
       const teamMark=team=>identityImage(team?.logo_path,team?.name||'Team',30,'team');
       const nextFixture=[...matches].filter(match=>['pending','ready'].includes(match.status)&&match.home_registration_id&&match.away_registration_id)
         .sort((a,b)=>(a.scheduled_at?new Date(a.scheduled_at).getTime():Infinity)-(b.scheduled_at?new Date(b.scheduled_at).getTime():Infinity))[0];
       const nextRoundIndex=nextFixture?rounds.findIndex(round=>round.matches.some(match=>match.id===nextFixture.id)):-1;
       const unfinishedRoundIndex=rounds.findIndex(round=>round.matches.some(match=>!['completed','forfeit','cancelled'].includes(match.status)));
       const openRoundIndex=nextRoundIndex>=0?nextRoundIndex:unfinishedRoundIndex>=0?unfinishedRoundIndex:rounds.length-1;
-      const fixtures=rounds.length?`<div class="rr-round-picker" role="tablist" aria-label="Round robin rounds">${rounds.map((round,index)=>`<button type="button" role="tab" id="rrRoundTab${stage.stage_number}-${index}" aria-controls="rrRoundPanel${stage.stage_number}-${index}" aria-selected="${index===openRoundIndex}" tabindex="${index===openRoundIndex?'0':'-1'}" data-rr-round="${stage.stage_number}" data-round-index="${index}" class="${index===openRoundIndex?'active':''}">${typeof round.number==='number'?`R${round.number}`:esc(round.number)}</button>`).join('')}</div><div class="rr-round-panels">${rounds.map((round,index)=>`<section class="rr-round-panel" role="tabpanel" id="rrRoundPanel${stage.stage_number}-${index}" aria-labelledby="rrRoundTab${stage.stage_number}-${index}"${index===openRoundIndex?'':' hidden'}><header><b>ROUND ${typeof round.number==='number'?round.number:esc(round.number)}</b><span>${round.matches.length} fixture${round.matches.length===1?'':'s'}</span></header><div class="rr-fixtures">${round.matches.map(match=>{const home=teamFor(match.home_registration_id),away=teamFor(match.away_registration_id);return `<article class="rr-fixture" data-status="${esc(publicMatchStatusKey(match))}"><small>Match ${match.position} | ${esc(publicMatchStatus(match))}${match.scheduled_at?` | ${esc(date(match.scheduled_at))}`:''}</small><div class="rr-fixture-teams"><span class="rr-fixture-team">${teamMark(home)}<span dir="auto">${esc(home?.name||'TBD')}</span></span><span class="rr-score" dir="ltr">${match.home_score??'-'} : ${match.away_score??'-'}</span><span class="rr-fixture-team rr-fixture-away"><span dir="auto">${esc(away?.name||'TBD')}</span>${teamMark(away)}</span></div></article>`}).join('')}</div></section>`).join('')}</div>`:'<p class="team-empty">No round-robin matches are published yet.</p>';
-      return `<section class="event-bracket-stage rr-stage"><div class="dh"><i data-lucide="list-ordered"></i>${esc(stage.name)}<span class="bracket-stage-meta">Round robin · ${standings.length} teams</span></div>${t.format==='round_robin_playoffs'?`<p class="rr-qualifier-note"><i data-lucide="trophy" aria-hidden="true"></i>Top ${laterStages.length?(qualified.size||qualifierCount):qualifierCount} teams qualify for the playoffs; ${Number(t.playoff_bye_count)||0} top seed${Number(t.playoff_bye_count)===1?'':'s'} get a first-round bye</p>`:''}<div class="rr-layout"><section class="rr-standings-card"><h3>STANDINGS</h3>${table}</section><section class="rr-schedule-card"><h3>ROUNDS</h3>${fixtures}</section></div></section>`;
+      const fixtures=rounds.length?`<div class="rr-round-picker" role="tablist" aria-label="Round robin rounds">${rounds.map((round,index)=>`<button type="button" role="tab" id="rrRoundTab${stage.stage_number}-${index}" aria-controls="rrRoundPanel${stage.stage_number}-${index}" aria-selected="${index===openRoundIndex}" tabindex="${index===openRoundIndex?'0':'-1'}" data-rr-round="${stage.stage_number}" data-round-index="${index}" class="${index===openRoundIndex?'active':''}">${typeof round.number==='number'?`R${round.number}`:esc(round.number)}</button>`).join('')}</div><div class="rr-round-panels">${rounds.map((round,index)=>`<section class="rr-round-panel" role="tabpanel" id="rrRoundPanel${stage.stage_number}-${index}" aria-labelledby="rrRoundTab${stage.stage_number}-${index}"${index===openRoundIndex?'':' hidden'}><header><b>ROUND ${typeof round.number==='number'?round.number:esc(round.number)}</b><span>${round.matches.length} fixture${round.matches.length===1?'':'s'}</span></header><div class="rr-fixtures">${round.matches.map((match,matchIndex)=>{const home=teamFor(match.home_registration_id),away=teamFor(match.away_registration_id);return `<a class="rr-fixture${isMyTeamMatch(match)?' is-my-team':''}" href="match-room.html?id=${encodeURIComponent(match.id)}" data-status="${esc(publicMatchStatusKey(match))}" aria-label="Open Round ${esc(round.number)} Match ${matchIndex+1}: ${esc(home?.name||'Team TBD')} (${esc(home?.tag||home?.name||'TBD')}) versus ${esc(away?.name||'Team TBD')} (${esc(away?.tag||away?.name||'TBD')})${isMyTeamMatch(match)?', your team':''}"><small>Match ${matchIndex+1}${isMyTeamMatch(match)?' · YOUR TEAM':''} | ${esc(publicMatchStatus(match))}${match.scheduled_at?` | ${esc(date(match.scheduled_at))}`:''}</small><div class="rr-fixture-teams"><span class="rr-fixture-team">${teamMark(home)}<span class="rr-fixture-team-name" dir="auto" title="${esc(home?.name||'Team TBD')}" data-full-name="${esc(home?.name||'Team TBD')}">${esc(home?.tag||home?.name||'TBD')}</span></span><span class="rr-score" dir="ltr">${match.home_score??'-'} : ${match.away_score??'-'}</span><span class="rr-fixture-team rr-fixture-away"><span class="rr-fixture-team-name" dir="auto" title="${esc(away?.name||'Team TBD')}" data-full-name="${esc(away?.name||'Team TBD')}">${esc(away?.tag||away?.name||'TBD')}</span>${teamMark(away)}</span></div></a>`}).join('')}</div></section>`).join('')}</div>`:'<p class="team-empty">No round-robin matches are published yet.</p>';
+      return `<section class="event-bracket-stage rr-stage"><div class="dh"><i data-lucide="list-ordered"></i>${esc(stage.name)}<span class="bracket-stage-meta">Round robin · ${standings.length} teams</span></div>${t.format==='round_robin_playoffs'?`<p class="rr-qualifier-note"><i data-lucide="trophy" aria-hidden="true"></i>Top ${laterStages.length?(qualified.size||qualifierCount):qualifierCount} teams qualify for the playoffs; ${playoffByeCount} top seed${playoffByeCount===1?'':'s'} advance directly to the semifinals</p>`:''}<div class="rr-layout"><section class="rr-standings-card"><h3>STANDINGS</h3>${table}</section><section class="rr-schedule-card"><h3>ROUNDS</h3>${fixtures}</section></div></section>`;
     };
 
     const playoffHtml=()=>{
       const stage=stages.find(row=>row.stage_number>1);if(!stage)return `<section class="playoff-empty"><span class="event-hub-kicker"><i data-lucide="git-fork"></i>PLAYOFFS</span><h3>The playoff bracket will appear here</h3><p>The organizer can publish the top ${Math.max(2,Number(t.playoff_qualifier_count)||4)} seeds before round robin finishes. ${Number(t.playoff_bye_count)||0} receive a first-round bye.</p></section>`;
-      const matches=(stageMatches.get(stage.id)||[]).filter(match=>match.bracket_side==='main'&&match.status!=='cancelled');if(!matches.length)return '<p class="team-empty">No playoff matches have been published yet.</p>';
+      const stageFixtures=(stageMatches.get(stage.id)||[]).filter(match=>match.status!=='cancelled');
+      if(stage.format==='double_elimination'){
+        if(!stageFixtures.length)return '<p class="team-empty">No playoff matches have been published yet.</p>';
+        const entrants=new Set(stageFixtures.flatMap(match=>[match.home_registration_id,match.away_registration_id]).filter(Boolean));
+        const semifinalSeeds=new Set(stageFixtures.filter(match=>match.bracket_side==='winners'&&match.round_number===2).flatMap(match=>[match.home_registration_id,match.away_registration_id]).filter(Boolean));
+        const roundColumns=side=>{
+          const matches=stageFixtures.filter(match=>match.bracket_side===side&&!(side==='grand_final'&&match.round_number===2&&!match.home_expected&&!match.away_expected));
+          const rounds=[...new Set(matches.map(match=>match.round_number))].sort((a,b)=>a-b);
+          return rounds.map(round=>{
+            const roundMatches=matches.filter(match=>match.round_number===round).sort((a,b)=>a.position-b.position);
+            roundMatches.forEach((match,index)=>matchNumberByMatch.set(match.id,index+1));
+            return `<section class="double-elim-round"><h4>${side==='grand_final'?'Grand final':`${side==='winners'?'Upper':'Lower'} · Round ${round}`}</h4><div class="double-elim-round-matches">${roundMatches.map(matchHtml).join('')}</div></section>`;
+          }).join('');
+        };
+        const upperRounds=[...new Set(stageFixtures.filter(match=>match.bracket_side==='winners').map(match=>match.round_number))].length;
+        const lowerRounds=[...new Set(stageFixtures.filter(match=>match.bracket_side==='losers').map(match=>match.round_number))].length;
+        const firstFinal=stageFixtures.find(match=>match.bracket_side==='grand_final'&&match.round_number===1);
+        const champion=firstFinal?.winner_registration_id?teamFor(firstFinal.winner_registration_id):null;
+        const finalFixtures=firstFinal?(()=>{
+          matchNumberByMatch.set(firstFinal.id,1);
+          return `<div class="double-elim-final-fixture"><span>GRAND FINAL</span>${matchHtml(firstFinal)}</div>`;
+        })():'';
+        const finalMarkup=finalFixtures||'<p class="double-elim-awaiting">Waiting for both finalists</p>';
+        const championMarkup=champion
+          ?`${identityImage(champion.logo_path,champion.name,52,'team')}<span><small>CHAMPION</small><b>${esc(champion.name)}</b></span>`
+          :`<span class="double-elim-champion-pending"><i data-lucide="award" aria-hidden="true"></i><b>Champion decided here</b><small>Grand final winner</small></span>`;
+        return `<section class="playoff-board playoff-board-double"><div class="playoff-board-head"><div><span class="event-hub-kicker"><i data-lucide="trophy"></i>TOP ${entrants.size||8} PLAYOFFS</span><h3>PLAYOFF BRACKET</h3></div><span class="playoff-format-badge">DOUBLE ELIMINATION · ${semifinalSeeds.size||2} SEMIFINAL BYES</span></div><div class="bracket-scroll-hint"><i data-lucide="move-horizontal" aria-hidden="true"></i>Follow both paths into the grand final</div><div class="bracket-rail double-elim-rail" tabindex="0" role="region" aria-label="Double elimination playoff bracket"><div class="double-elim-board" style="--upper-rounds:${Math.max(1,upperRounds)};--lower-rounds:${Math.max(1,lowerRounds)}"><section class="double-elim-lane double-elim-upper"><h4><span>UPPER BRACKET</span><small>Win to advance · one loss moves to the lower bracket</small></h4><div class="double-elim-rounds">${roundColumns('winners')}</div></section><section class="double-elim-lane double-elim-lower"><h4><span>LOWER BRACKET</span><small>Win to stay alive</small></h4><div class="double-elim-rounds">${roundColumns('losers')}</div></section><aside class="double-elim-finals"><section class="double-elim-final-card"><span class="double-elim-final-kicker"><i data-lucide="trophy" aria-hidden="true"></i>CHAMPIONSHIP</span>${finalMarkup}<div class="double-elim-champion">${championMarkup}</div></section></aside></div></div></section>`;
+      }
+      const matches=stageFixtures.filter(match=>match.bracket_side==='main');if(!matches.length)return '<p class="team-empty">No playoff matches have been published yet.</p>';
       const rounds=[...new Set(matches.map(match=>match.round_number))].sort((a,b)=>a-b),lastRound=rounds.at(-1),matchCount=round=>matches.filter(match=>match.round_number===round).length;
       const roundName=round=>round===lastRound?'Grand final':matchCount(round)===2?'Semifinals':matchCount(round)===4?'Quarterfinals':matchCount(round)===8?'Round of 16':`Round ${round}`;
       const final=matches.find(match=>match.round_number===lastRound),championId=final?.winner_registration_id,champion=championId?teamFor(championId):null;
@@ -213,14 +278,21 @@ else (async()=>{
       const bracketRounds=rounds.map((round,index)=>`<section class="playoff-round"><header><h3>${esc(roundName(round))}</h3><span>${esc(t.best_of||'BO3')}</span></header><div class="playoff-round-matches" data-match-count="${matchCount(round)}">${matches.filter(match=>match.round_number===round).sort((a,b)=>a.position-b.position).map(match=>{
         const home=teamFor(match.home_registration_id),away=teamFor(match.away_registration_id),finished=['completed','forfeit'].includes(match.status),winner=match.winner_registration_id;
         const side=(team,score,isWinner)=>`<div class="playoff-team${isWinner?' is-winner':''}">${identityImage(team?.logo_path,team?.name||'Team',30,'team')}<span dir="auto">${esc(team?.name||'To be decided')}</span><b>${score??'—'}</b></div>`;
-        return `<a class="playoff-match" href="match-room.html?id=${encodeURIComponent(match.id)}" data-status="${esc(publicMatchStatusKey(match))}"><div class="playoff-match-meta"><b>${esc(roundName(round).replace(/s$/,''))} ${match.position}</b><span data-status="${esc(publicMatchStatusKey(match))}">${finished?'FINAL':esc(publicMatchStatus(match))}</span></div>${side(home,match.home_score,winner===match.home_registration_id&&winner!==null)}${side(away,match.away_score,winner===match.away_registration_id&&winner!==null)}<footer>${match.scheduled_at?esc(date(match.scheduled_at)):'BO3'}<span>VIEW MATCH <i data-lucide="arrow-up-right"></i></span></footer></a>`;
+        const matchNumber=matches.filter(candidate=>candidate.round_number===round).sort((a,b)=>a.position-b.position).findIndex(candidate=>candidate.id===match.id)+1;
+        return `<a class="playoff-match${isMyTeamMatch(match)?' is-my-team':''}" href="match-room.html?id=${encodeURIComponent(match.id)}" data-status="${esc(publicMatchStatusKey(match))}"><div class="playoff-match-meta"><b>${esc(roundName(round).replace(/s$/,''))} ${matchNumber}</b><span data-status="${esc(publicMatchStatusKey(match))}">${finished?'FINAL':esc(publicMatchStatus(match))}</span></div>${side(home,match.home_score,winner===match.home_registration_id&&winner!==null)}${side(away,match.away_score,winner===match.away_registration_id&&winner!==null)}<footer>${match.scheduled_at?esc(date(match.scheduled_at)):'BO3'}<span>VIEW MATCH <i data-lucide="arrow-up-right"></i></span></footer></a>`;
       }).join('')}</div></section>`).join('');
       return `<section class="playoff-board"><div class="playoff-board-head"><div><span class="event-hub-kicker"><i data-lucide="trophy"></i>TOP ${actualQualifierCount} PLAYOFFS</span><h3>PLAYOFF BRACKET</h3></div><span class="playoff-format-badge">SINGLE ELIMINATION</span></div><div class="playoff-bracket-viewport" tabindex="0" role="region" aria-label="Playoff bracket rounds"><div class="playoff-bracket">${bracketRounds}<section class="playoff-champion"><span>CHAMPION</span><i data-lucide="trophy"></i>${champion?identityImage(champion.logo_path,champion.name,66,'team'):'<span class="playoff-champion-placeholder">?</span>'}<b>${esc(champion?.name||'To be decided')}</b><small>${champion?'EVENT WINNER':'AWAITING GRAND FINAL'}</small></section></div></div></section>`;
     };
 
     const prizes=prizeResult.data?.length?prizeResult.data.map(p=>`<li class="event-reg"><b>${esc(p.label||`Place ${p.place}`)}</b><span>${fmt(p.amount)} ${esc(p.currency)}</span></li>`).join(''):'<li class="team-empty">No prize schedule has been published.</li>';
     const participants=regs.length?regs.map(r=>{const team=teamFor(r.id),status=String(r.status||'unknown').toLowerCase(),search=`${team?.name||''} ${team?.tag||''}`.toLocaleLowerCase();return `<li class="event-reg event-participant" data-team-search="${esc(search)}"><span class="team-identity">${identityImage(team?.logo_path,team?.name||'Team',36,'team')}<span><b><a href="team.html?id=${encodeURIComponent(team?.id||'')}">${esc(team?.name||'Team unavailable')}</a></b><small>${esc(team?.tag||'Tournament participant')}</small></span></span><span class="participant-status" data-status="${esc(status)}">${esc(status.replaceAll('_',' '))}</span></li>`}).join(''):'<li class="team-empty">No approved teams yet.</li>';
-    const ruleFacts=[['Format',String(t.format||'To be announced').replaceAll('_',' ')],...(t.format==='round_robin_playoffs'?[['Playoff qualifiers',`Top ${Number(t.playoff_qualifier_count)||4} teams`],['First-round byes',`${Number(t.playoff_bye_count)||0} top seeds`]]:[]),['Match length',t.best_of||'Best of 1'],['Region',t.region||'To be announced'],['Anti-cheat',t.anti_cheat_required?'Required':'Not required'],['Substitutes',String(Number(t.substitute_limit)||0)],['Check-in window',`${Number(t.check_in_minutes)||0} minutes`]];
+    const playerCount=Number(t.roster_size)||0,rosterLabel=playerCount?`${playerCount}v${playerCount} · ${playerCount} players per team`:'To be announced';
+    const publishedPlayoffStage=stages.find(stage=>stage.stage_number>1),publishedPlayoffMatches=publishedPlayoffStage?stageMatches.get(publishedPlayoffStage.id)||[]:[];
+    const publishedEntrants=new Set(publishedPlayoffMatches.flatMap(match=>[match.home_registration_id,match.away_registration_id]).filter(Boolean));
+    const publishedSemiSeeds=new Set(publishedPlayoffMatches.filter(match=>match.bracket_side==='winners'&&match.round_number===2).flatMap(match=>[match.home_registration_id,match.away_registration_id]).filter(Boolean));
+    const playoffQualifierCount=publishedEntrants.size||Number(t.playoff_qualifier_count)||4;
+    const playoffByes=Number(t.playoff_bye_count)||publishedSemiSeeds.size;
+    const ruleFacts=[['Format',String(t.format||'To be announced').replaceAll('_',' ')],['Players per team',rosterLabel],...(t.format==='round_robin_playoffs'?[['Playoff qualifiers',`Top ${playoffQualifierCount} teams`],['Semifinal byes',`${playoffByes} top seeds`]]:[]),['Match length',t.best_of||'Best of 1'],['Region',t.region||'To be announced'],['Anti-cheat',t.anti_cheat_required?'Required':'Not required'],['Substitutes',String(Number(t.substitute_limit)||0)],['Check-in window',`${Number(t.check_in_minutes)||0} minutes`]];
     const rules=`<dl class="event-rule-facts">${ruleFacts.map(([label,value])=>`<div><dt>${label}</dt><dd>${esc(value)}</dd></div>`).join('')}</dl>${t.map_pool?.length?`<div class="event-map-pool"><h3>Map pool</h3><ul>${t.map_pool.map(map=>`<li>${esc(map)}</li>`).join('')}</ul></div>`:''}<div class="event-rule-note"><h3>Additional rules</h3><p class="tournament-rules-copy${t.rules?'':' is-empty'}">${esc(t.rules||'The organizer has not published additional rules.')}</p></div>`;
     let stageMarkup=stages.length?stages.map(stage=>stage.format==='round_robin'?roundRobinHtml(stage):eliminationHtml(stage)).join(''):'<p class="team-empty">The organizer has not published a bracket for this tournament yet.</p>';
     const stageHeading=t.format==='round_robin'?'Round robin table & schedule':t.format==='round_robin_playoffs'?'Group stage & playoffs':'Tournament bracket';
@@ -319,7 +391,7 @@ else (async()=>{
       stageMarkup=stages.length?stages.map(stage=>stage.format==='round_robin'?roundRobinHtml(stage):eliminationHtml(stage)).join(''):'<p class="team-empty">The organizer has not published a bracket for this tournament yet.</p>';
       const bracket=$('#eventBrackets');if(bracket){bracket.innerHTML=renderEventBrackets();icons();bindCompetitionAdminActions();}
     };
-    const overviewFacts=[['Event status',effectiveStatus.replaceAll('_',' ')],['Registration opens',date(t.registration_opens_at)],['Registration closes',date(t.registration_closes_at)],['Event starts',date(t.starts_at)],['Roster size',Number(t.roster_size)||'TBA']];
+    const overviewFacts=[['Event status',effectiveStatus.replaceAll('_',' ')],['Registration opens',date(t.registration_opens_at)],['Registration closes',date(t.registration_closes_at)],['Event starts',date(t.starts_at)],['Players per team',rosterLabel]];
     const teamFill=capacity?Math.min(100,Math.round(count/capacity*100)):0;
     const overviewMarkup=`<div class="event-overview-grid">${overviewFacts.map(([label,value],index)=>`<div class="event-overview-fact"><small>${label}</small><b${index===0?` data-status="${esc(effectiveStatus)}"`:''}>${esc(value)}</b></div>`).join('')}<div class="event-overview-fact event-overview-capacity"><small>Approved teams</small><b>${count}${capacity?` of ${capacity}`:''}</b>${capacity?`<div class="event-overview-meter" role="progressbar" aria-label="Approved team slots filled" aria-valuemin="0" aria-valuemax="${capacity}" aria-valuenow="${Math.min(count,capacity)}"><span style="width:${teamFill}%"></span></div>`:''}</div></div>`;
     const pageHeading=(eyebrow,title,description)=>`<header class="event-page-title"><span>${eyebrow}</span><h2>${title}</h2><p>${description}</p></header>`;
@@ -609,26 +681,81 @@ else (async()=>{
     setInterval(()=>{if(!document.hidden)refreshEventHubData();},30000);
     document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshEventHubData();});
 
-    $('#eventRegister')?.addEventListener('click',async event=>{
+    let registrationTeams=null,lineupBusy=false,lineupLocked=false;
+    const registrationPanel=$('#eventRegistrationPanel'),registrationButton=$('#eventRegister'),lineupSelect=$('#eventTeam');
+    const lineupSummary=$('#eventLineupSummary'),lineupRoster=$('#eventLineupRoster'),lineupHint=$('#eventLineupHint'),lineupSubmit=$('#eventSubmitRegistration');
+    const starterTarget=Math.max(1,Number(t.roster_size)||1),substituteLimit=Math.max(0,Number(t.substitute_limit)||0);
+    const syncLineupState=()=>{
+      if(!lineupRoster||!lineupSubmit)return;
+      const choices=[...lineupRoster.querySelectorAll('[data-lineup-role]')];
+      const starters=choices.filter(choice=>choice.value==='starter'),substitutes=choices.filter(choice=>choice.value==='substitute');
+      if(lineupSummary)lineupSummary.innerHTML=`<span class="event-lineup-count${starters.length===starterTarget?' is-ready':''}"><b>${starters.length}</b> / ${starterTarget} starters</span><span class="event-lineup-count"><b>${substitutes.length}</b> / ${substituteLimit} substitutes</span>`;
+      if(lineupHint)lineupHint.textContent=starters.length!==starterTarget?`Choose exactly ${starterTarget} starters to continue.`:substitutes.length>substituteLimit?`Choose no more than ${substituteLimit} substitutes.`:'Your starting lineup is ready. You can leave unused players unselected.';
+      lineupSubmit.disabled=lineupBusy||lineupLocked||starters.length!==starterTarget||substitutes.length>substituteLimit||choices.length===0;
+    };
+    const loadLineupForTeam=async teamId=>{
+      lineupLocked=false;
+      if(!teamId){lineupRoster.innerHTML='';lineupSummary.innerHTML='<span>Choose a team to see its active game roster.</span>';lineupHint.textContent='Select a team first.';lineupSubmit.disabled=true;return;}
+      lineupRoster.innerHTML='<p class="event-lineup-loading">Loading the active game roster…</p>';
+      lineupSummary.innerHTML=`<span>${starterTarget} starters required</span><span>${substituteLimit} substitutes allowed</span>`;
+      const [rosterResult,gameRosterResult]=await Promise.all([
+        SUPA.client.rpc('list_team_roster',{p_team_id:teamId}),
+        SUPA.client.from('team_game_members').select('user_id').eq('team_id',teamId).eq('game',t.game)
+      ]);
+      if(rosterResult.error)throw rosterResult.error;if(gameRosterResult.error)throw gameRosterResult.error;
+      const gamePlayerIds=new Set((gameRosterResult.data||[]).map(row=>row.user_id));
+      const players=(rosterResult.data||[]).filter(player=>player.status==='active'&&gamePlayerIds.has(player.user_id));
+      if(!players.length){lineupRoster.innerHTML='<p class="event-lineup-empty">No active players are listed for this game yet. Add players to the team game roster, then try again.</p>';lineupSummary.innerHTML='<span>No eligible players found.</span>';lineupHint.textContent='A captain can update the team game roster before registering.';lineupSubmit.disabled=true;return;}
+      lineupRoster.innerHTML=players.map(player=>{
+        const name=player.player_name||player.username||'Player';
+        const role=player.member_role==='captain'?'Team captain':player.member_role==='substitute'?'Team substitute':'Team player';
+        const options=`<option value="">Not selected</option><option value="starter">Main roster</option>${substituteLimit?'<option value="substitute">Substitute</option>':''}`;
+        return `<label class="event-lineup-player"><span class="event-lineup-identity"><span class="event-lineup-avatar" aria-hidden="true">${esc(name.trim().slice(0,1).toUpperCase()||'P')}</span><span><b>${esc(name)}</b><small>${role}</small></span></span><span class="event-lineup-choice"><span>Event role</span><select data-lineup-role data-user-id="${esc(player.user_id)}" aria-label="Tournament role for ${esc(name)}">${options}</select></span></label>`;
+      }).join('');
+      lineupRoster.querySelectorAll('[data-lineup-role]').forEach(choice=>choice.addEventListener('change',syncLineupState));
+      syncLineupState();
+    };
+    registrationButton?.addEventListener('click',async event=>{
       if(READ_ONLY_PREVIEW)return;
-      const button=event.currentTarget;button.disabled=true;
+      if(!Auth.is()){location.href=`login.html?next=${encodeURIComponent(`tournament.html?id=${t.id}`)}&need=PLAYER`;return;}
+      if(!registrationPanel)return;
+      if(!registrationPanel.hidden){registrationPanel.hidden=true;registrationButton.setAttribute('aria-expanded','false');registrationButton.innerHTML='<i data-lucide="user-plus"></i>Register a team';icons();return;}
+      registrationButton.disabled=true;
       try{
-        if(!Auth.is()){location.href=`login.html?next=${encodeURIComponent(`tournament.html?id=${t.id}`)}&need=PLAYER`;return;}
-        const {data:members,error:memberError}=await SUPA.client.from('team_members').select('team_id').eq('user_id',Auth.user.id).eq('role','captain').eq('status','active');
-        if(memberError)throw memberError;
-        const ids=[...new Set((members||[]).map(m=>m.team_id))];
-        if(!ids.length)throw new Error('An active team captain is required to register.');
-        const {data:eligible,error:teamError}=await SUPA.client.from('teams').select('id,name,tag').in('id',ids).eq('game',t.game);
-        if(teamError)throw teamError;if(!eligible?.length)throw new Error('Your captain teams must play this tournament’s game.');
-        if(eligible.length>1){
-          const wrap=$('#eventTeamWrap'),select=$('#eventTeam');
-          if(wrap.hidden){select.innerHTML=eligible.map(team=>`<option value="${esc(team.id)}">${esc(team.name)} (${esc(team.tag)})</option>`).join('');wrap.hidden=false;button.textContent='Submit selected team';button.disabled=false;return;}
+        if(!registrationTeams){
+          const {data:members,error:memberError}=await SUPA.client.from('team_members').select('team_id').eq('user_id',Auth.user.id).eq('role','captain').eq('status','active');
+          if(memberError)throw memberError;
+          const ids=[...new Set((members||[]).map(member=>member.team_id))];
+          if(!ids.length)throw new Error('An active team captain is required to register.');
+          const {data:teams,error:teamError}=await SUPA.client.from('teams').select('id,name,tag').in('id',ids).eq('game',t.game);
+          if(teamError)throw teamError;if(!teams?.length)throw new Error('Your captain teams must play this tournament’s game.');
+          registrationTeams=teams;
+          lineupSelect.innerHTML='<option value="">Choose a team</option>'+teams.map(team=>`<option value="${esc(team.id)}">${esc(team.name)} · ${esc(team.tag)}</option>`).join('');
+          if(teams.length===1)lineupSelect.value=teams[0].id;
+          lineupSelect.addEventListener('change',()=>loadLineupForTeam(lineupSelect.value).catch(error=>toast('err','Could not load team roster',error.message||'Please try again.')));
         }
-        const team=eligible.length===1?eligible[0]:eligible.find(x=>x.id===$('#eventTeam').value);
-        if(!team)throw new Error('Choose an eligible team before registering.');
-        const {error}=await SUPA.client.rpc('register_team',{p_tournament_id:t.id,p_team_id:team.id});if(error)throw error;
-        toast('ok','Registration submitted','The organizer will review this registration.');button.textContent='Registration submitted';
-      }catch(error){toast('err','Could not register team',error.message||'Please try again.');button.disabled=false;}
+        registrationPanel.hidden=false;registrationButton.setAttribute('aria-expanded','true');registrationButton.innerHTML='<i data-lucide="x"></i>Close lineup setup';icons();
+        await loadLineupForTeam(lineupSelect.value);
+        registrationPanel.scrollIntoView({block:'nearest',behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'});
+      }catch(error){toast('err','Could not start registration',error.message||'Please try again.');}
+      finally{registrationButton.disabled=false;}
+    });
+    lineupSubmit?.addEventListener('click',async event=>{
+      if(READ_ONLY_PREVIEW||lineupBusy||lineupLocked)return;
+      const selected=[...lineupRoster.querySelectorAll('[data-lineup-role]')].filter(choice=>choice.value);
+      const starters=selected.filter(choice=>choice.value==='starter').map(choice=>choice.dataset.userId);
+      const substitutes=selected.filter(choice=>choice.value==='substitute').map(choice=>choice.dataset.userId);
+      if(starters.length!==starterTarget||substitutes.length>substituteLimit){syncLineupState();return;}
+      lineupBusy=true;lineupSubmit.disabled=true;lineupSubmit.setAttribute('aria-busy','true');
+      try{
+        const {error}=await SUPA.client.rpc('register_team_with_lineup',{p_tournament_id:t.id,p_team_id:lineupSelect.value,p_starter_user_ids:starters,p_substitute_user_ids:substitutes});
+        if(error)throw error;
+        lineupLocked=true;lineupSelect.disabled=true;lineupRoster.querySelectorAll('[data-lineup-role]').forEach(choice=>choice.disabled=true);
+        lineupHint.textContent='Roster locked for this tournament. The organizer will review your team entry.';
+        lineupSubmit.hidden=true;registrationButton.disabled=true;registrationButton.innerHTML='<i data-lucide="check"></i>Registration submitted';icons();
+        toast('ok','Registration submitted','Your starting lineup and substitutes are locked for this tournament.');
+      }catch(error){toast('err','Could not register team',error.message||'Please try again.');}
+      finally{lineupBusy=false;lineupSubmit.removeAttribute('aria-busy');if(!lineupLocked)syncLineupState();}
     });
     const backToTop=$('#eventBackToTop');
     const syncBackToTop=()=>{if(backToTop)backToTop.hidden=!matchMedia('(max-width: 520px)').matches&&scrollY<500;};
@@ -644,4 +771,3 @@ else (async()=>{
     }
   }catch(error){fail(error.message||'Please try again.');}
 })();
-
