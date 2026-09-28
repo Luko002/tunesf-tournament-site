@@ -2,14 +2,15 @@
 Auth.ready.then(async()=>{
   if(!requirePerm('BAN_USERS'))return;
   const wrap=document.querySelector('main .sec.tight .wrap');if(!wrap)return;
-  const canAssign=Auth.has('MANAGE_PERMISSIONS'),canAudit=Auth.has('AUDIT_LOGS'),isSuperAdmin=Auth.user.roles.includes('SUPER_ADMIN');
+  const canAssign=Auth.has('MANAGE_PERMISSIONS'),canAudit=Auth.has('AUDIT_LOGS'),isSuperAdmin=Auth.user.roles.includes('SUPER_ADMIN'),canReviewGameLinks=Auth.user.roles.some(role=>['SUPER_ADMIN','PLATFORM_ADMIN'].includes(role));
   buildConsoleStrip();
   const workspace=$('#adminWorkspace');
   workspace.classList.add('admin-workspace');
   const globalRoles=['REFEREE','MODERATOR','TOURNAMENT_ADMIN','PLATFORM_ADMIN','SUPER_ADMIN'];
-  const tabs=[['analytics','activity','Platform analytics'],isSuperAdmin?['teams','shield','Team directory']:null,canAssign?['roles','users','Global role assignments']:null,canAudit?['audit','history','Audit events']:null].filter(Boolean);
+  const tabs=[['analytics','activity','Platform analytics'],isSuperAdmin?['teams','shield','Team directory']:null,canReviewGameLinks?['game-links','badge-check','Game ID verification']:null,canAssign?['roles','users','Global role assignments']:null,canAudit?['audit','history','Audit events']:null].filter(Boolean);
   const sections=[`<nav class="admin-section-nav" aria-label="Admin sections"><span class="admin-section-label">ADMIN WORKSPACE</span><div class="admin-section-tabs" role="tablist" aria-label="Admin sections">${tabs.map(([key,icon,title])=>`<button type="button" class="admin-section-tab" role="tab" id="admin-tab-${key}" aria-controls="admin-panel-${key}" aria-selected="false" data-admin-view="${key}"><i data-lucide="${icon}"></i><span>${title}</span></button>`).join('')}</div></nav>`,`<section class="dcard admin-analytics-card" id="admin-panel-analytics" role="tabpanel" aria-labelledby="admin-tab-analytics" data-admin-panel="analytics"><div class="dh"><i data-lucide="activity"></i><span>Platform analytics</span><span class="mono-r" id="adminMetricsUpdated">Loading…</span></div><div class="db"><div id="adminMetrics" class="kpis" aria-live="polite"></div><div id="adminAnalyticsCharts" class="analytics-grid" aria-live="polite"></div><div class="admin-analytics-foot"><span><i data-lucide="database"></i> LIVE PLATFORM DATA</span><button class="btn btn-line btn-sm" id="refreshAdminMetrics" type="button"><i data-lucide="refresh-cw"></i> Refresh analytics</button></div></div></section>`];
   if(isSuperAdmin)sections.push(`<section class="dcard admin-team-management" id="admin-panel-teams" role="tabpanel" aria-labelledby="admin-tab-teams" data-admin-panel="teams"><div class="dh"><i data-lucide="shield"></i><span>Team directory</span><span class="mono-r">SUPER ADMIN</span></div><div class="db">${READ_ONLY_PREVIEW?'<p class="admin-readonly-note" role="note">Team changes are disabled in this local preview because it is connected to production. The directory is read-only.</p>':''}<p class="admin-team-policy">Select a team to update its name, organization, or logo. Teams with tournament history cannot be deleted.</p><label class="admin-team-search"><span>Find a team</span><input id="adminTeamSearch" type="search" placeholder="Search team, game, or organization" aria-controls="adminTeamList"></label><p id="adminTeamCount" class="admin-team-count" role="status" aria-live="polite">Loading teams…</p><ul id="adminTeamList" class="admin-team-list" aria-live="polite"><li class="team-empty">Loading teams…</li></ul></div></section>`);
+  if(canReviewGameLinks)sections.push(`<section class="dcard" id="admin-panel-game-links" role="tabpanel" aria-labelledby="admin-tab-game-links" data-admin-panel="game-links"><div class="dh"><i data-lucide="badge-check"></i><span>Player game ID verification</span><span class="mono-r">PLATFORM ADMIN</span></div><div class="db">${READ_ONLY_PREVIEW?'<p class="admin-readonly-note" role="note">Verification changes are disabled in this preview.</p>':''}<p class="admin-team-policy">Review the submitted game ID against its proof link. Only approve when the profile clearly matches the player.</p><ul id="adminGameIdentityLinks" class="admin-team-list" aria-live="polite"><li class="team-empty">Loading submissions…</li></ul></div></section>`);
   if(canAssign)sections.push(`<section class="dcard admin-roles-card" id="admin-panel-roles" role="tabpanel" aria-labelledby="admin-tab-roles" data-admin-panel="roles"><div class="dh"><i data-lucide="users"></i><span>Global role assignments</span><span class="mono-r">ACCESS CONTROL</span></div><div class="db">${READ_ONLY_PREVIEW?'<p class="admin-readonly-note" id="adminRoleReadonly" role="note">Role changes are disabled in this local preview because it is connected to production. Use a writable staging environment to grant or revoke roles.</p>':''}
     <form id="roleGrantForm" class="team-create-form"${READ_ONLY_PREVIEW?' aria-describedby="adminRoleReadonly"':''}><label><span>Username</span><input name="username" required minlength="2" maxlength="32" placeholder="Enter exact username" autocomplete="off"${READ_ONLY_PREVIEW?' disabled':''}></label><label><span>Role</span><select name="role"${READ_ONLY_PREVIEW?' disabled':''}>${globalRoles.map(r=>`<option>${r}</option>`).join('')}</select></label><button class="btn btn-gold btn-sm" type="submit"${READ_ONLY_PREVIEW?' disabled aria-describedby="adminRoleReadonly"':''}>Grant role</button></form>
     <div class="admin-role-filterbar"><label><span>Search username or ID</span><input id="adminRoleSearch" type="search" placeholder="Search a username" aria-controls="adminRoles"></label><label><span>Role</span><select id="adminRoleFilter" aria-controls="adminRoles"><option value="">All roles</option>${globalRoles.map(role=>`<option value="${role}">${role.replaceAll('_',' ')}</option>`).join('')}</select></label><p id="adminRoleFilterStatus" role="status" aria-live="polite"></p></div>
@@ -30,6 +31,13 @@ Auth.ready.then(async()=>{
   workspace.querySelector('.admin-section-tabs')?.addEventListener('keydown',event=>{if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;const keys=tabs.map(([key])=>key),current=keys.indexOf(document.activeElement?.dataset.adminView);if(current<0)return;event.preventDefault();const next=event.key==='Home'?0:event.key==='End'?keys.length-1:(current+(event.key==='ArrowRight'?1:-1)+keys.length)%keys.length;const button=workspace.querySelector(`[data-admin-view="${keys[next]}"]`);button.focus();showAdminView(keys[next],true);});
   window.addEventListener('hashchange',()=>showAdminView(location.hash.slice(1)));
   const report=(title,error)=>toast('err',title,error?.message||'Please try again.');
+  async function loadGameIdentityLinks(){
+    const host=$('#adminGameIdentityLinks');if(!host)return;
+    const {data,error}=await SUPA.client.rpc('list_pending_player_game_identity_links');if(error)throw error;
+    const labels={rl:'Rocket League',mlbb:'Mobile Legends: Bang Bang',eafc:'EA SPORTS FC',efootball:'eFootball'};
+    host.innerHTML=data?.length?data.map(link=>`<li class="admin-game-identity-row"><div><b>${esc(labels[link.game_key]||link.game_key)} · ${esc(link.username)}</b><span>${esc(link.player_id)}${link.platform?` · ${esc(link.platform)}`:''}</span><small>Submitted ${esc(new Intl.DateTimeFormat(undefined,{dateStyle:'medium',timeStyle:'short'}).format(new Date(link.submitted_at)))}</small><a href="${esc(link.proof_url)}" target="_blank" rel="noopener noreferrer">Open proof link <i data-lucide="external-link"></i></a></div><label><span>Review note</span><input type="text" maxlength="500" data-game-link-note="${esc(link.id)}" placeholder="Reason or note (optional)"></label><div><button class="btn btn-gold btn-sm" type="button" data-game-link-review="verified" data-game-link-id="${esc(link.id)}"${READ_ONLY_PREVIEW?' disabled':''}>Verify</button><button class="btn btn-line btn-sm" type="button" data-game-link-review="rejected" data-game-link-id="${esc(link.id)}"${READ_ONLY_PREVIEW?' disabled':''}>Request changes</button></div></li>`).join(''):'<li class="team-empty">No game IDs are waiting for review.</li>';
+    icons();
+  }
   let adminTeams=[],adminOrganizations=[];
   const expandedAdminTeamIds=new Set();
   function renderAdminTeams(){
@@ -184,6 +192,16 @@ Auth.ready.then(async()=>{
     }catch(error){if(newPath)await removePublicImage(newPath);report('Could not update team logo',error);input.disabled=false;input.value='';}
   });
   workspace.addEventListener('click',async event=>{
+    const gameLinkReview=event.target.closest('[data-game-link-review]');
+    if(gameLinkReview){
+      if(READ_ONLY_PREVIEW)return;
+      const linkId=gameLinkReview.dataset.gameLinkId,status=gameLinkReview.dataset.gameLinkReview,note=workspace.querySelector(`[data-game-link-note="${CSS.escape(linkId)}"]`)?.value.trim()||null;
+      if(status==='rejected'&&!note){toast('err','Add a review note','Tell the player what needs to change before requesting new proof.');return;}
+      gameLinkReview.disabled=true;
+      try{const {error}=await SUPA.client.rpc('review_player_game_identity_link',{p_link_id:linkId,p_status:status,p_review_note:note});if(error)throw error;toast('ok',status==='verified'?'Game ID verified':'Changes requested',status==='verified'?'The player link is now verified.':'The player can update the ID and submit new proof.');await loadGameIdentityLinks();}
+      catch(error){report('Could not review game ID',error);gameLinkReview.disabled=false;}
+      return;
+    }
     const removeLogo=event.target.closest('[data-admin-team-logo-remove]');
     if(removeLogo){
       if(READ_ONLY_PREVIEW)return;
@@ -211,7 +229,7 @@ Auth.ready.then(async()=>{
     try{const {error}=await SUPA.client.rpc('revoke_role',{target:button.dataset.revokeRole,requested_role:button.dataset.role});if(error)throw error;toast('ok','Role revoked','The role change was recorded in the audit trail.');await loadRoles();await loadAudit();}
     catch(error){report('Could not revoke role',error);button.disabled=false;}
   });
-  const results=await Promise.allSettled([loadMetrics(),loadRoles(),loadAudit(),loadAdminTeams()]);
+  const results=await Promise.allSettled([loadMetrics(),loadRoles(),loadAudit(),loadAdminTeams(),canReviewGameLinks?loadGameIdentityLinks():Promise.resolve()]);
   for(const result of results)if(result.status==='rejected')report('Administration data unavailable',result.reason);
 }).catch(error=>toast('err','Administration unavailable',error?.message||'Please reload and try again.'));
 
