@@ -61,7 +61,7 @@ Auth.ready.then(async()=>{
       const playerChoices=(captains.data||[]).map(p=>({id:p.user_id,label:p.username?`@${p.username}${p.player_name?` · ${p.player_name}`:''}`:`${p.player_name||'Player'} · ${p.user_id.slice(0,6)}`,search:`@${p.username||''} ${p.player_name||''}`.toLocaleLowerCase()}));
       const captainPicker=(pickerId,selectedId='')=>{
         const selected=playerChoices.find(p=>p.id===selectedId);
-        return `<div class="org-player-picker" data-org-player-picker><input type="search" id="${esc(pickerId)}-search" data-player-picker-search role="combobox" aria-autocomplete="list" aria-haspopup="listbox" aria-expanded="false" aria-controls="${esc(pickerId)}-options" required autocomplete="off" placeholder="Search players by name or username" value="${esc(selected?.label||'')}"><input type="hidden" name="captain_id" value="${esc(selectedId)}"><div class="org-player-options" id="${esc(pickerId)}-options" role="listbox" hidden>${playerChoices.map(p=>`<button type="button" role="option" class="org-player-option" data-player-picker-option data-user-id="${esc(p.id)}" data-player-label="${esc(p.label)}" data-player-search="${esc(p.search)}"><b>${esc(p.label)}</b></button>`).join('')}</div></div>`;
+        return `<div class="org-player-picker"><input type="search" id="${esc(pickerId)}-search" list="${esc(pickerId)}-players" data-player-picker-search required autocomplete="off" placeholder="Search players by name or username" value="${esc(selected?.label||'')}"><input type="hidden" name="captain_id" value="${esc(selectedId)}"><datalist id="${esc(pickerId)}-players">${playerChoices.map(p=>`<option value="${esc(p.label)}" data-user-id="${esc(p.id)}" data-player-search="${esc(p.search)}"></option>`).join('')}</datalist></div>`;
       };
       const teamRows=(teams.data||[]).map(t=>`<li class="event-reg org-team-row"><div class="team-identity">${identityImage(t.logo_path,t.name,36,'team')}<div><b>${esc(t.name)} <small>${esc(t.tag)}</small></b><small>${esc(GAMES[t.game]?.label||t.game)} · ${esc(t.region||'Region not set')}</small>${canManageTeams?`<form class="organization-captain-form" data-org-captain="${esc(t.id)}"><label><span>Game captain</span>${captainPicker(`team-${t.id}-captain`,t.captain_id)}</label><button class="btn btn-line btn-sm" type="submit">Save captain</button></form>`:''}${org.owner_id===Auth.user.id?`<button class="btn btn-line btn-sm team-danger-action" type="button" data-org-delete-team="${esc(t.id)}" data-org-team-name="${esc(t.name)}">Delete team</button>`:''}</div></div></li>`).join('')||'<li class="team-empty">No game teams yet. Add the first roster below.</li>';
       const memberRows=(members.data||[]).map(m=>{
@@ -110,36 +110,16 @@ Auth.ready.then(async()=>{
       toast('ok','Team deleted','The team profile and roster were removed. Tournament records are preserved.');await render();
     }catch(error){fail('Could not delete team',error);button.disabled=false;}
   });
-  function filterCaptainPicker(input,open=true){
-    const picker=input.closest('[data-org-player-picker]'),options=picker?.querySelector('.org-player-options');
-    if(!picker||!options)return;
-    const query=input.value.trim().toLocaleLowerCase(),buttons=[...options.querySelectorAll('[data-player-picker-option]')];
-    let shown=0;
-    buttons.forEach(button=>{const matches=!query||button.dataset.playerSearch.includes(query);button.hidden=!matches||shown>=6;if(matches)shown++;});
-    const hidden=picker.querySelector('input[type="hidden"][name="captain_id"]');if(hidden)hidden.value='';
-    input.setCustomValidity(input.value?'Choose a player from the search results.':'');
-    options.hidden=!open||shown===0;input.setAttribute('aria-expanded',String(!options.hidden));
+  function syncCaptainPicker(input){
+    const picker=input.closest('.org-player-picker'),hidden=picker?.querySelector('input[type="hidden"][name="captain_id"]'),datalist=input.list;
+    const value=input.value.trim().toLocaleLowerCase(),options=[...(datalist?.options||[])];
+    const selected=options.find(option=>option.value.trim().toLocaleLowerCase()===value);
+    options.forEach(option=>{option.hidden=!!value&&!option.dataset.playerSearch.includes(value);});
+    if(hidden)hidden.value=selected?.dataset.userId||'';
+    input.setCustomValidity(input.value&&!selected?'Choose a player from the search suggestions.':'');
   }
-  list.addEventListener('focusin',event=>{const input=event.target.closest('[data-player-picker-search]');if(input)filterCaptainPicker(input);});
-  list.addEventListener('input',event=>{const input=event.target.closest('[data-player-picker-search]');if(input)filterCaptainPicker(input);});
-  list.addEventListener('keydown',event=>{
-    const input=event.target.closest('[data-player-picker-search]');if(!input)return;
-    const picker=input.closest('[data-org-player-picker]'),options=picker?.querySelector('.org-player-options');
-    if(event.key==='ArrowDown'&&!options?.hidden){event.preventDefault();options.querySelector('[data-player-picker-option]:not([hidden])')?.focus();}
-    else if(event.key==='Enter'&&!options?.hidden){const first=options.querySelector('[data-player-picker-option]:not([hidden])');if(first){event.preventDefault();first.click();}}
-    else if(event.key==='Escape'&&options&&!options.hidden){options.hidden=true;input.setAttribute('aria-expanded','false');}
-  });
-  list.addEventListener('mousedown',event=>{if(event.target.closest('[data-player-picker-option]'))event.preventDefault();});
-  list.addEventListener('click',event=>{
-    const option=event.target.closest('[data-player-picker-option]');if(!option)return;
-    const picker=option.closest('[data-org-player-picker]'),input=picker?.querySelector('[data-player-picker-search]'),hidden=picker?.querySelector('input[type="hidden"][name="captain_id"]'),options=picker?.querySelector('.org-player-options');
-    if(!input||!hidden)return;
-    input.value=option.dataset.playerLabel;hidden.value=option.dataset.userId;input.setCustomValidity('');input.setAttribute('aria-expanded','false');if(options)options.hidden=true;input.focus();
-  });
-  list.addEventListener('focusout',event=>{
-    const picker=event.target.closest('[data-org-player-picker]');if(!picker)return;
-    setTimeout(()=>{if(!picker.contains(document.activeElement)){const options=picker.querySelector('.org-player-options'),input=picker.querySelector('[data-player-picker-search]');if(options)options.hidden=true;input?.setAttribute('aria-expanded','false');}},0);
-  });
+  list.addEventListener('input',event=>{const input=event.target.closest('[data-player-picker-search]');if(input)syncCaptainPicker(input);});
+  list.addEventListener('change',event=>{const input=event.target.closest('[data-player-picker-search]');if(input)syncCaptainPicker(input);});
   list.addEventListener('submit',async event=>{
     if(READ_ONLY_PREVIEW){if(event.target.closest('form'))event.preventDefault();return;}
     const ownerForm=event.target.closest('[data-org-owner]');
