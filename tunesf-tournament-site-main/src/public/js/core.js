@@ -56,7 +56,11 @@ function supabaseFetch(input,init){
 const Auth={
   user:null,permissions:new Set(),ready:null,
   is(){return !!this.user},
-  has(perm){return this.permissions.has(perm)||this.user?.roles?.includes('SUPER_ADMIN')||false},
+  has(perm){
+    const ownerRestricted=new Set(['CREATE_TOURNAMENT','REFEREE_MATCHES','VERIFY_TEAMS','START_MATCH','PAUSE_MATCH','APPROVE_RESULT','REJECT_RESULT','FILE_INCIDENT']);
+    if(ownerRestricted.has(perm)&&this.user?.roles?.includes('ORGANIZATION_OWNER'))return false;
+    return this.permissions.has(perm)||this.user?.roles?.includes('SUPER_ADMIN')||false;
+  },
   highestRole(){return this.user?.roles?.[0]||'VISITOR'},
   consoles(){return CONSOLES.filter(c=>this.has(c.perm))},
   async signOut(){const {error}=await SUPA.client.auth.signOut();if(error)throw error;this.user=null;location.href='login.html';},

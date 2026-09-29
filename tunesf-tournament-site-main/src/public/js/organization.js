@@ -4,7 +4,7 @@ Auth.ready.then(async()=>{
   const isSuperAdmin=Auth.user.roles.includes('SUPER_ADMIN');
   const wrap=document.querySelector('main .sec.tight .wrap');
   if(!wrap)return;
-  wrap.innerHTML=`<div class="console-strip" id="consoleStrip"></div>
+  wrap.innerHTML=`<div class="org-owner-dashboard">
     <section class="dcard" style="margin-top:22px"><div class="dh"><i data-lucide="landmark"></i>Create an organization</div><div class="db">
       <form id="organizationCreateForm" class="team-create-form">
         <label><span>Name</span><input name="name" minlength="2" maxlength="100" required></label>
@@ -15,7 +15,8 @@ Auth.ready.then(async()=>{
       </form>
     </div></section>
     <label class="team-picker" id="organizationSearchWrap" hidden>Find an organization<input id="organizationSearch" type="search" placeholder="Search federation organizations"></label>
-    <section id="organizationList" class="player-team-list" aria-live="polite" style="margin-top:18px"><div class="team-empty">Loading your organizations...</div></section>`;
+    <section id="organizationList" class="player-team-list" aria-live="polite" style="margin-top:18px"><div class="team-empty">Loading your organizations...</div></section>
+    </div>`;
   const list=$('#organizationList');
   $('#organizationCreateForm').closest('.dcard').hidden=!isSuperAdmin;
   $('#organizationSearchWrap').hidden=!isSuperAdmin;
@@ -37,8 +38,8 @@ Auth.ready.then(async()=>{
       const strip=$('#consoleStrip');if(strip)strip.insertAdjacentElement('afterend',note);else wrap.prepend(note);
     }
   }
-  const capabilityLabels={manage_org:'Manage organization settings',manage_staff:'Manage staff',manage_teams:'Manage organization teams',create_tournaments:'Create organization tournaments',manage_prizes:'Manage prizes'};
-  const capabilityDescriptions={manage_org:'Edit organization details',manage_staff:'Add and update organization staff',manage_teams:'Create game teams and assign captains',create_tournaments:'Host tournaments for this organization',manage_prizes:'Manage tournament prizes'};
+  const capabilityLabels={manage_org:'Manage organization settings',manage_staff:'Manage staff',manage_teams:'Manage organization teams'};
+  const capabilityDescriptions={manage_org:'Edit organization details',manage_staff:'Add and update organization staff',manage_teams:'Create game teams and assign captains'};
   async function render(){
     list.innerHTML='<div class="team-empty">Loading your organizations...</div>';
     const {data:organizations,error}=await SUPA.client.rpc('list_organizations_for_current_user');
@@ -64,16 +65,22 @@ Auth.ready.then(async()=>{
         const permissions=(m.capabilities||[]).map(c=>`<span>${esc(capabilityLabels[c]||c)}</span>`).join('')||'<span class="org-no-access">No permissions</span>';
         return `<li class="organization-staff-row"><div class="org-member-name"><i>${esc(name.slice(0,1).toUpperCase())}</i><span><b>${esc(name)}</b><small>${m.username?`@${esc(m.username)}`:'Username not set'}</small></span></div><span class="org-role-pill">${esc(m.role)}</span><div class="org-permission-pills">${permissions}</div><details class="org-account-id"><summary>Account ID</summary><code>${esc(m.user_id)}</code></details></li>`;
       }).join('')||'<li class="team-empty">No staff assignments yet.</li>';
-      const caps=Object.entries(capabilityLabels).map(([cap,label],i)=>`<label class="org-capability"><input type="checkbox" name="capabilities" value="${cap}"${i===1?' checked':''}><span><b>${label}</b><small>${capabilityDescriptions[cap]}</small></span></label>`).join('');
+      const assignableCapabilities=['manage_teams','manage_staff'];
+      const caps=assignableCapabilities.map((cap,i)=>`<label class="org-capability"><input type="checkbox" name="capabilities" value="${cap}"${i===0?' checked':''}><span><b>${capabilityLabels[cap]}</b><small>${capabilityDescriptions[cap]}</small></span></label>`).join('');
       const teamCount=(teams.data||[]).length,staffCount=(members.data||[]).length;
-      return `<article class="dcard team-card org-card" data-organization-card data-org-name="${esc(org.name.toLowerCase())}"><div class="dh org-card-title"><i data-lucide="landmark"></i><span>${esc(org.name)}</span><span class="mono-r">${esc(org.slug)}</span></div><details class="org-card-manage"${organizationRows.length===1&&!isSuperAdmin?' open':''}><summary><span>Manage teams and staff</span><small>${teamCount} ${teamCount===1?'TEAM':'TEAMS'} · ${staffCount} ${staffCount===1?'STAFF MEMBER':'STAFF MEMBERS'}</small></summary><div class="db org-card-body">
-        <div class="org-summary"><div class="org-facts"><span>${esc(org.region||'Region not set')}</span><span>${org.owner_id===Auth.user.id?'Owner':esc(org.my_role||'Member')}</span><span>Owner: @${esc(org.owner_username||org.owner_player_name||'Unknown')}</span></div><p>${esc(org.description||'No description provided.')}</p></div>
-        ${isSuperAdmin?`<form class="org-owner-form" data-org-owner="${esc(org.id)}"><div class="org-section-heading"><b>Change organization owner</b><small>Assign ownership using a TUNESF username.</small></div><div class="org-owner-control"><label><span class="sr-only">Account username</span><input name="username" required minlength="2" maxlength="32" pattern="[A-Za-z0-9_.-]+" placeholder="Account username" aria-label="Account username"></label><button class="btn btn-line btn-sm" type="submit">Assign owner</button></div></form>`:''}
-        <section class="org-team-section"><div class="org-section-heading"><div><b>Game teams and captains</b><small>Each captain manages only their game roster.</small></div><span class="org-count">${(teams.data||[]).length}</span></div><ul class="team-invites org-team-list">${teamRows}</ul></section>
-        ${canManageTeams?`<form class="organization-game-team-form org-add-team-form" data-org-game-team="${esc(org.id)}"><div class="org-section-heading"><div><b>Add a game team</b><small>Create one roster for each game this club competes in.</small></div></div><div class="org-team-form-fields"><label><span>Team name</span><input name="name" required minlength="2" maxlength="80" value="${esc(org.name)}"></label><label><span>Short tag</span><input name="tag" required minlength="2" maxlength="8" placeholder="JSK"></label><label><span>Game</span><select name="game" required><option value="">Choose a game</option>${Object.entries(GAMES).map(([key,g])=>`<option value="${esc(key)}">${esc(g.label)}</option>`).join('')}</select></label><label><span>Region</span><input name="region" maxlength="100" value="${esc(org.region||'')}" placeholder="Tunisia"></label><label class="org-captain-field"><span>Game captain</span><select name="captain_id" required><option value="">Choose a player</option>${captainOptions}</select></label></div><button class="btn btn-gold btn-sm" type="submit">Create game team</button></form>`:''}
-        ${canStaff?`<section class="organization-staff"><h3 class="team-section-title">Staff access <span>${(members.data||[]).length}</span></h3><ul class="organization-staff-list">${memberRows}</ul>
-          <form class="organization-staff-form" data-org-staff="${esc(org.id)}"><div class="org-staff-form-head"><div><b>Add or update a person</b><small>Use the username on their TUNESF account.</small></div><span>Admin and Staff are labels. Permissions define access. Team and staff permissions are active; tournament and prize permissions are not yet connected to organizer actions.</span></div><div class="org-staff-form-fields"><label><span>Username</span><input name="username" required minlength="2" maxlength="32" pattern="[A-Za-z0-9_.-]+" placeholder="player_username"></label><label><span>Organization role</span><select name="role"><option value="staff">Staff</option><option value="admin">Admin</option></select></label></div><fieldset class="org-capability-grid"><legend>Choose permissions</legend>${caps}</fieldset><button class="btn btn-gold btn-sm" type="submit">Save staff access</button></form></section>`:''}
-      </div></details></article>`;
+      return `<article class="dcard team-card org-card" data-organization-card data-org-name="${esc(org.name.toLowerCase())}">
+        <div class="dh org-card-title"><i data-lucide="landmark"></i><span>${esc(org.name)}</span><span class="mono-r">${esc(org.slug)}</span></div>
+        <div class="db org-card-body">
+          <div class="org-summary"><div class="org-facts"><span>${esc(org.region||'Region not set')}</span><span>${org.owner_id===Auth.user.id?'Owner':esc(org.my_role||'Member')}</span><span>Owner: @${esc(org.owner_username||org.owner_player_name||'Unknown')}</span></div><p>${esc(org.description||'No description provided.')}</p></div>
+          ${isSuperAdmin?`<details class="org-owner-tools"><summary>Ownership settings</summary><form class="org-owner-form" data-org-owner="${esc(org.id)}"><div class="org-section-heading"><b>Change organization owner</b><small>Assign ownership using a TUNESF username.</small></div><div class="org-owner-control"><label><span class="sr-only">Account username</span><input name="username" required minlength="2" maxlength="32" pattern="[A-Za-z0-9_.-]+" placeholder="Account username" aria-label="Account username"></label><button class="btn btn-line btn-sm" type="submit">Assign owner</button></div></form></details>`:''}
+          <section class="org-team-section">
+            <div class="org-section-heading"><div><b>Game teams</b><small>Each game has its own roster and captain.</small></div><span class="org-count">${teamCount}</span></div>
+            ${canManageTeams?`<details class="org-create-team"><summary><span><b>Create a game team</b><small>Set up a squad for one of your games.</small></span><i data-lucide="plus"></i></summary><form class="organization-game-team-form org-add-team-form" data-org-game-team="${esc(org.id)}"><div class="org-team-form-fields"><label><span>Game</span><select name="game" required><option value="">Choose a game</option>${Object.entries(GAMES).map(([key,g])=>`<option value="${esc(key)}">${esc(g.label)}</option>`).join('')}</select></label><label><span>Team name</span><input name="name" required minlength="2" maxlength="80" value="${esc(org.name)}"></label><label><span>Short tag</span><input name="tag" required minlength="2" maxlength="8" placeholder="JSK"></label><label><span>Game captain</span><select name="captain_id" required><option value="">Choose a player</option>${captainOptions}</select></label></div><details class="org-region-option"><summary>Regional details <small>Optional</small></summary><label><span>Team region</span><input name="region" maxlength="100" value="${esc(org.region||'')}" placeholder="Use organization region"></label></details><button class="btn btn-gold btn-sm" type="submit">Create game team</button></form></details>`:''}
+            <ul class="team-invites org-team-list">${teamRows}</ul>
+          </section>
+          ${canStaff?`<details class="organization-staff"><summary><span>Staff access</span><small>${staffCount} ${staffCount===1?'person':'people'}</small></summary><div class="org-staff-panel"><ul class="organization-staff-list">${memberRows}</ul><form class="organization-staff-form" data-org-staff="${esc(org.id)}"><div class="org-staff-form-head"><div><b>Add or update staff access</b><small>Use the username on their TUNESF account.</small></div><span>Staff can help manage game teams and organization staff. Tournament and referee duties are managed separately.</span></div><div class="org-staff-form-fields"><label><span>Username</span><input name="username" required minlength="2" maxlength="32" pattern="[A-Za-z0-9_.-]+" placeholder="player_username"></label><label><span>Organization role</span><select name="role"><option value="staff">Staff</option><option value="admin">Admin</option></select></label></div><fieldset class="org-capability-grid"><legend>Choose permissions</legend>${caps}</fieldset><button class="btn btn-gold btn-sm" type="submit">Save staff access</button></form></div></details>`:''}
+        </div>
+      </article>`;
     }));
     list.innerHTML=cards.join('');
     const searchEmpty=document.createElement('p');searchEmpty.id='organizationSearchEmpty';searchEmpty.className='team-empty';searchEmpty.setAttribute('role','status');searchEmpty.textContent='No organizations match your search. Try another name.';searchEmpty.hidden=true;list.prepend(searchEmpty);
@@ -116,6 +123,6 @@ Auth.ready.then(async()=>{
     }catch(error){fail('Could not update organization staff',error);}finally{button.disabled=false;}
   });
   $('#organizationSearch')?.addEventListener('input',filterOrganizations);
-  buildConsoleStrip();
+  $('#consoleStrip')?.remove();
   try{await render();}catch(error){list.innerHTML='<div class="team-empty">Your organization records could not be loaded.</div>';fail('Organization workspace unavailable',error);}
 }).catch(error=>toast('err','Organization workspace unavailable',error?.message||'Please reload and try again.'));
