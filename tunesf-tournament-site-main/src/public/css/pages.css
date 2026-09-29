@@ -606,6 +606,7 @@ button.room-step{border:0;background:transparent;text-align:left;cursor:pointer}
 .org-owner-dashboard #organizationList{display:grid;grid-template-columns:minmax(0,1fr);width:100%;max-width:none}
 .org-owner-dashboard #organizationList>[data-organization-card],.org-owner-dashboard .org-card{grid-column:1/-1;width:100%;max-width:none;min-width:0}
 .org-owner-dashboard .org-summary>p{max-width:none}
+.org-role-note{display:block;color:var(--faint);font:400 10px/1.4 var(--fb);letter-spacing:normal;text-transform:none}
 
 /* Player workspace: keep game switching and linked accounts in a steady rail. */
 .player-workspace-layout{display:grid;grid-template-columns:minmax(225px,260px) minmax(0,1fr);align-items:start;gap:20px;margin-top:16px}
