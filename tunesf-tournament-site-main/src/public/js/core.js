@@ -212,6 +212,13 @@ function currentPage(){const page=location.pathname.split('/').filter(Boolean).p
 function buildNav(){
   $$('.logo').forEach(el=>{el.innerHTML='<img class="brand-lockup" src="/assets/tunesfgold.png" alt="Tunisian Esports Federation">';});
   const nl=$('#navLinks'),page=currentPage();
+  const footerGrid=$('footer .f-grid');
+  if(footerGrid&&!footerGrid.querySelector('[data-legal-links]')){
+    const legalLinks='<div class="footer-legal-links" data-legal-links><b>Legal</b><a href="terms.html">Terms of Service</a><a href="privacy.html">Privacy Policy</a></div>';
+    const lastColumn=footerGrid.querySelector('.f-col:last-of-type');
+    if(lastColumn)lastColumn.insertAdjacentHTML('beforeend',legalLinks);
+    else footerGrid.insertAdjacentHTML('beforeend',`<div class="f-col">${legalLinks}</div>`);
+  }
   if(nl){
     const links=[['index.html','Home'],['tournaments.html','Tournaments'],['clubs.html','Clubs'],['teams.html','Teams'],['bracket.html','Match center']];
     let html=links.map(([href,label])=>`<a href="${href}"${page===href?' class="act" aria-current="page"':''}>${label}</a>`).join('');

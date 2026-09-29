@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=Barlow:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/css/style.css?v=20260927h">
-<link rel="stylesheet" href="/css/pages.css?v=20260927g">
+<link rel="stylesheet" href="/css/pages.css?v=20260929a">
 </head>
 <body>
 
@@ -73,6 +73,7 @@
       <div><label class="fl" for="suMail">Email</label><input id="suMail" type="email" autocomplete="email" placeholder="you@example.com" required></div>
       <div><label class="fl" for="suPass">Password</label><input id="suPass" type="password" autocomplete="new-password" minlength="12" placeholder="At least 12 characters" required></div>
       <p style="color:var(--faint);font-size:12px;margin-top:-4px">New accounts start as <b class="mono" style="color:var(--cyan)">PLAYER</b>. A player who creates a team becomes its team-scoped captain. Organization ownership and staff roles are separate scoped responsibilities.</p>
+      <label class="legal-consent"><input id="suTerms" name="termsAccepted" type="checkbox" required><span>I agree to the <a href="terms.html" target="_blank" rel="noopener noreferrer">Terms of Service</a> and acknowledge the <a href="privacy.html" target="_blank" rel="noopener noreferrer">Privacy Policy</a>.</span></label>
       <button class="btn btn-gold" type="submit" id="suBtn"><i data-lucide="user-plus"></i>Create account</button>
     </form>
 
@@ -101,7 +102,7 @@
 <script src="https://unpkg.com/lucide@1.47.0/dist/umd/lucide.min.js" integrity="sha384-v15JX+vZHMR3T6LQR9N6e6wIKrKOdNTbdj8j+e5irqq3L9gCauJz2vGlUzomWyUp" crossorigin="anonymous"></script>
 <script>if(!window.lucide){document.write('<script src="https://cdn.jsdelivr.net/npm/lucide@1.47.0/dist/umd/lucide.min.js" integrity="sha384-v15JX+vZHMR3T6LQR9N6e6wIKrKOdNTbdj8j+e5irqq3L9gCauJz2vGlUzomWyUp" crossorigin="anonymous"><\/script>')}</script>
 <script src="/js/supabase-config.js?v=3"></script>
-<script src="/js/core.js?v=20260927i"></script>
+<script src="/js/core.js?v=20260929a"></script>
 <script src="/js/auth.js?v=20260927a"></script>
 </body>
 </html>
